@@ -9,7 +9,10 @@ typedef enum error_id_enum error_id;
 enum error_id_enum
 {
     MESH_SUCCESS,
-
+    MESH_BOUNDARY_SIZE_MISMATCH,
+    MESH_ALLOCATION_FAILED,
+    MESH_MATRIX_FAILURE,
+    MESH_SOLVER_FAILED,
 };
 
 #endif //MESH_ERR_H

@@ -21,10 +21,9 @@ enum boundary_id_enum
     BOUNDARY_ID_NORTH = 1,
     BOUNDARY_ID_EAST = 2,
     BOUNDARY_ID_WEST = 3,
-    BOUNDARY_ID_SOUTH = 1,
+    BOUNDARY_ID_SOUTH = 4,
 };
 typedef enum boundary_id_enum boundary_id;
-
 
 
 struct boundary_curve_struct
@@ -40,8 +39,8 @@ struct boundary_block_struct
     unsigned n;
     mesh_block* b1;
     boundary_id id1;
-    mesh_block* b2;
-    boundary_id id2;
+    mesh_block* target;
+    boundary_id target_id;
 };
 
 typedef struct boundary_block_struct boundary_block;
@@ -51,13 +50,16 @@ struct boundary_struct
     boundary_type type;
     union
     {
+        unsigned n;
         boundary_curve curve;
         boundary_block block;
     };
 };
 
-struct mesh_block
+struct mesh_block_struct
 {
+    const char* label;
+    unsigned npts;
     unsigned n1;
     unsigned n2;
     boundary bnorth;

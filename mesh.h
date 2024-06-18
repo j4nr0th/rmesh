@@ -39,7 +39,7 @@ struct mesh_struct
 };
 
 
-error_id mesh_create(unsigned n_blocks, const mesh_block* blocks, mesh** p_out);
+error_id mesh_create(unsigned n_blocks, mesh_block* blocks, mesh* p_out);
 
 void mesh_destroy(mesh* mesh);
 

@@ -9,6 +9,10 @@ add_executable(mesh main.c
         mesh.h
         err.c
         err.h
+        io.c
+        io.h
 )
-
-target_compile_options(mesh PRIVATE -Wall -Werror -Wextra)
+add_subdirectory(jmtx)
+#target_compile_options(mesh PRIVATE -Wall -Werror -Wextra)
+target_link_libraries(mesh PRIVATE jmtx)
+target_include_directories(mesh PRIVATE jmtx/include)
