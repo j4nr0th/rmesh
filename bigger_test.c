@@ -12,7 +12,7 @@ static void linespace(double x0, double x1, unsigned n, double* pout)
     }
     for (unsigned i = 0; i < n; ++i)
     {
-        const double s = (double)i / (double)n - 1;
+        const double s = (double)i / (double)(n - 1);
         pout[i] = x0 * (1-s) + x1 * s;
     }
 }

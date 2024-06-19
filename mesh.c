@@ -7,6 +7,7 @@
 #include <jmtx/double/solvers/bicgstab_iteration.h>
 #include <jmtx/double/solvers/gauss_seidel_iteration.h>
 #include <assert.h>
+#include <math.h>
 #include <stdio.h>
 
 #include <jmtx/double/matrices/band_row_major_safe.h>
@@ -14,6 +15,8 @@
 #include <jmtx/double/solvers/lu_solving.h>
 
 #include <jmtx/double/matrices/sparse_conversion.h>
+
+#include "jmtx/double/solvers/recursive_generalized_minimum_residual_iteration.h"
 
 
 static inline unsigned find_boundary_interior_node(const mesh_block* blk, boundary_id t, unsigned idx)
@@ -95,6 +98,131 @@ static inline jmtx_result boundary_point_condition(jmtxd_matrix_crs* mat, unsign
     uint32_t index = idx;
     double value = 1;
     return jmtxds_matrix_crs_set_row(mat, idx, 1, &index, &value);
+}
+
+
+enum {DIRECT_SOLVER_LIMIT = (1 << 12), GMRESR_SOLVER_LIMIT = (1 << 18), GOD_HELP_ME = (1 << 20), GMRESR_MLIM = (1<<6),
+    GCR_TRUNCATION_LIM = (1 << 7)};
+
+
+static inline jmtx_result solve_the_system_of_equations(unsigned npts, jmtxd_matrix_crs* mat,
+    double xrhs[const restrict static npts], double yrhs[const restrict static npts],
+    double out_x[const restrict npts], double out_y[const restrict npts])
+{
+    jmtxd_matrix_brm* banded = NULL, *l = NULL, *u = NULL;
+    jmtx_result res = JMTX_RESULT_SUCCESS;
+    jmtx_result r1 = JMTX_RESULT_SUCCESS, r2 = JMTX_RESULT_SUCCESS;
+
+    //  Is the problem small enough to solve for it directly?
+    if (npts < DIRECT_SOLVER_LIMIT)
+    {
+        res = jmtxd_convert_crs_to_brm(mat, &banded, NULL);
+        if (res != JMTX_RESULT_SUCCESS)
+        {
+            return res;
+        }
+        res = jmtxd_decompose_lu_brm(banded, &l, &u, NULL);
+        jmtxd_matrix_brm_destroy(banded);
+        if (res != JMTX_RESULT_SUCCESS)
+        {
+            return res;
+        }
+        jmtxd_solve_direct_lu_brm(l, u, xrhs, out_x);
+        jmtxd_solve_direct_lu_brm(l, u, yrhs, out_y);
+        jmtxd_matrix_brm_destroy(l);
+        jmtxd_matrix_brm_destroy(u);
+        return JMTX_RESULT_SUCCESS;
+    }
+
+    jmtxd_solver_arguments argsx =
+        {
+        .in_convergence_criterion = 1e-9,
+        .in_max_iterations = 1000,
+        .out_last_error = 1.0,  //  This is here in case we don't run GMRESR
+        };
+    jmtxd_solver_arguments argsy =
+        {
+        .in_convergence_criterion = 1e-9,
+        .in_max_iterations = 1000,
+        .out_last_error = 1.0,  //  This is here in case we don't run GMRESR
+    };
+
+    double* const aux1 = calloc(npts, sizeof*aux1);
+    assert(aux1);
+    double* const aux2 = calloc(npts, sizeof*aux2);
+    assert(aux2);
+    double* const aux3 = calloc(npts, sizeof*aux3);
+    assert(aux3);
+    double* const aux4 = calloc(npts, sizeof*aux4);
+    assert(aux4);
+    double* const aux5 = calloc(npts, sizeof*aux5);
+    assert(aux5);
+    double* const aux6 = calloc(npts, sizeof*aux6);
+    assert(aux6);
+    double* const auxvecs1 = calloc(npts*GMRESR_MLIM, sizeof*auxvecs1);
+    assert(auxvecs1);
+    double* const auxvecs2 = calloc(npts*GCR_TRUNCATION_LIM, sizeof*auxvecs2);
+    assert(auxvecs2);
+    double* const auxvecs3 = calloc(npts*GCR_TRUNCATION_LIM, sizeof*auxvecs3);
+    assert(auxvecs3);
+
+    if (npts < GMRESR_SOLVER_LIMIT)
+    {
+        jmtxd_matrix_brm* aux_mat_gmresr;
+        res = jmtxd_matrix_brm_new(&aux_mat_gmresr, GMRESR_MLIM, GMRESR_MLIM, GMRESR_MLIM-1, 0, NULL, NULL);
+        if (res != JMTX_RESULT_SUCCESS)
+        {
+            goto end;
+        }
+
+        jmtxd_solve_iterative_gmresr_crs(mat, xrhs, out_x, GMRESR_MLIM, GCR_TRUNCATION_LIM, aux_mat_gmresr,
+        aux1, aux2, aux3, aux4, aux5, aux6, auxvecs1, auxvecs2, auxvecs3, &argsx);
+        if (!isfinite(argsx.out_last_error))
+        {
+            argsx.out_last_error = 1;
+            memset(out_x, 0, npts*sizeof(*out_x));
+        }
+        jmtxd_solve_iterative_gmresr_crs(mat, yrhs, out_y, GMRESR_MLIM, GCR_TRUNCATION_LIM, aux_mat_gmresr,
+                aux1, aux2, aux3, aux4, aux5, aux6, auxvecs1, auxvecs2, auxvecs3, &argsy);
+        if (!isfinite(argsy.out_last_error))
+        {
+            argsy.out_last_error = 1;
+            memset(out_y, 0, npts*sizeof(*out_y));
+        }
+
+        jmtxd_matrix_brm_destroy(aux_mat_gmresr);
+    }
+
+    if (argsx.out_last_error > argsx.in_convergence_criterion)
+    {
+        r1 = jmtxd_solve_iterative_bicgstab_crs(mat, xrhs, out_x, aux1, aux2, aux3, aux4, aux5, aux6, &argsx);
+    }
+    if (argsy.out_last_error > argsy.in_convergence_criterion)
+    {
+        r2 = jmtxd_solve_iterative_bicgstab_crs(mat, xrhs, out_x, aux1, aux2, aux3, aux4, aux5, aux6, &argsy);
+    }
+
+end:
+    free(auxvecs3);
+    free(auxvecs2);
+    free(auxvecs1);
+    free(aux6);
+    free(aux5);
+    free(aux4);
+    free(aux3);
+    free(aux2);
+    free(aux1);
+
+    if (r1 != JMTX_RESULT_SUCCESS)
+    {
+        return r1;
+    }
+    if (r2 != JMTX_RESULT_SUCCESS)
+    {
+        return r2;
+    }
+
+    return res;
 }
 
 
@@ -424,95 +552,13 @@ error_id mesh_create(unsigned int n_blocks, mesh_block* blocks, mesh* p_out)
             }
         }
     }
-    //  BICGStab should work well, since the matrix is very close to symmetric
-    double* aux1 = calloc(point_cnt, sizeof*aux1);
-    assert(aux1);
-    double* aux2 = calloc(point_cnt, sizeof*aux2);
-    assert(aux2);
-    double* aux3 = calloc(point_cnt, sizeof*aux3);
-    assert(aux3);
-    double* aux4 = calloc(point_cnt, sizeof*aux4);
-    assert(aux4);
-    double* aux5 = calloc(point_cnt, sizeof*aux5);
-    assert(aux5);
-    double* aux6 = calloc(point_cnt, sizeof*aux6);
-    assert(aux6);
 
-    // printf("Matrix:\n[");
-    // for (unsigned i = 0; i < point_cnt; ++i)
-    // {
-    //     printf("[");
-    //     for (unsigned j = 0; j < point_cnt; ++j)
-    //     {
-    //         printf(" %3.g", jmtxd_matrix_crs_get_entry(system_matrix, i, j));
-    //     }
-    //     printf(" ]\n ");
-    // }
-    // printf("]\n");
-    // exit(EXIT_SUCCESS);
-
-    jmtxd_solver_arguments args = 
-    {
-        .in_convergence_criterion = 1e-5,
-        .in_max_iterations = 10000,
-    };
-
-    //res = jmtxd_solve_iterative_bicgstab_crs(system_matrix, xrhs, xnodal, aux1, aux2, aux3, aux4, aux5, aux6, &args);
-    //res = jmtxd_solve_iterative_gauss_seidel_crs(system_matrix, xrhs, xnodal, aux1, &args);
-    jmtxd_matrix_brm* banded_matrix,*l,*u;
-    res = jmtxd_convert_crs_to_brm(system_matrix, &banded_matrix, NULL);
+    res = solve_the_system_of_equations(point_cnt, system_matrix, xrhs, yrhs, xnodal, ynodal);
     if (res != JMTX_RESULT_SUCCESS)
     {
-        ret = MESH_MATRIX_FAILURE;
-        goto solvers_done;
-    }
-    res = jmtxd_decompose_lu_brm(banded_matrix, &l, &u, NULL);
-    if (res != JMTX_RESULT_SUCCESS)
-    {
-        jmtxd_matrix_brm_destroy(banded_matrix);
-        ret = MESH_MATRIX_FAILURE;
-        goto solvers_done;
-    }
-    res = jmtxd_solve_iterative_lu_brm_refine(banded_matrix, l, u, xrhs, xnodal, aux1, &args);
-    if (res != JMTX_RESULT_SUCCESS)
-    {
-        jmtxd_matrix_brm_destroy(u);
-        jmtxd_matrix_brm_destroy(l);
-        jmtxd_matrix_brm_destroy(banded_matrix);
-        ret = MESH_MATRIX_FAILURE;
-        goto solvers_done;
-    }
-    res = jmtxd_solve_iterative_lu_brm_refine(banded_matrix, l, u, yrhs, ynodal, aux1, &args);
-    if (res != JMTX_RESULT_SUCCESS)
-    {
-        jmtxd_matrix_brm_destroy(u);
-        jmtxd_matrix_brm_destroy(l);
-        jmtxd_matrix_brm_destroy(banded_matrix);
-        ret = MESH_MATRIX_FAILURE;
-        goto solvers_done;
+        ret = MESH_SOLVER_FAILED;
     }
 
-    jmtxd_matrix_brm_destroy(u);
-    jmtxd_matrix_brm_destroy(l);
-    jmtxd_matrix_brm_destroy(banded_matrix);
-
-
-    // res = jmtxd_solve_iterative_bicgstab_crs(system_matrix, xrhs, ynodal, aux1, aux2, aux3, aux4, aux5, aux6, &args);
-    // if (res != JMTX_RESULT_SUCCESS)
-    // {
-    //     jmtxd_matrix_brm_destroy(u);
-    //     jmtxd_matrix_brm_destroy(l);
-    //     jmtxd_matrix_brm_destroy(banded_matrix);
-    //     ret = MESH_SOLVER_FAILED;
-    //     goto solvers_done;
-    // }
-solvers_done:
-    free(aux6);
-    free(aux5);
-    free(aux4);
-    free(aux3);
-    free(aux2);
-    free(aux1);
 cleanup_matrix:
     jmtxd_matrix_crs_destroy(system_matrix);
     if (ret != MESH_SUCCESS)
