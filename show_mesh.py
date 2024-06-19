@@ -16,3 +16,8 @@ if __name__ == "__main__":
     plt.scatter(data2[:50, 0], data2[:50, 1], marker="x")
     plt.scatter(data2[50:, 0], data2[50:, 1], marker="o")
     plt.show()
+
+    data3 = np.loadtxt("cmake-build-debug/bigger.dat")
+    plt.gca().set_aspect("equal")
+    plt.scatter(data3[:, 0], data3[:, 1], marker="x")
+    plt.show()

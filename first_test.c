@@ -1,3 +1,4 @@
+#include <assert.h>
 #include <stdio.h>
 #include "io.h"
 #include "mesh.h"
@@ -18,7 +19,7 @@ int main(void)
     double zero2[NB2] = {0};
     double one1[NB1] = {0};
     double one2[NB2] = {0};
-    double two1[NB1] = {0};
+    // double two1[NB1] = {0};
     double two2[NB2] = {0};
 
     for (unsigned i = 0; i < NB1; ++i)
@@ -29,7 +30,7 @@ int main(void)
         fwd21[i] = x + 1;
         bwd21[NB1-i-1] = x + 1;
         one1[i] = 1;
-        two1[i] = 2;
+        // two1[i] = 2;
     }
     for (unsigned i = 0; i < NB2; ++i)
     {
@@ -55,6 +56,7 @@ int main(void)
 
     mesh m = {0};
     error_id err = mesh_create(1, &mb1, &m);
+    assert(err == MESH_SUCCESS);
     save_nodes_to_file("out.dat", m.n_points, m.p_x, m.p_y);
     mesh_destroy(&m);
 
@@ -88,6 +90,7 @@ int main(void)
             .curve = {.n = NB1, .x = zero1, .y=bwd21}},
     };
     err = mesh_create(2, blocks, &m);
+    assert(err == MESH_SUCCESS);
     save_nodes_to_file("out1.dat", m.n_points, m.p_x, m.p_y);
     mesh_destroy(&m);
 

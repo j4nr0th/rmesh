@@ -7,6 +7,7 @@
 #include <jmtx/double/solvers/bicgstab_iteration.h>
 #include <jmtx/double/solvers/gauss_seidel_iteration.h>
 #include <assert.h>
+#include <stdio.h>
 
 #include <jmtx/double/matrices/band_row_major_safe.h>
 #include <jmtx/double/decompositions/band_lu_decomposition.h>
@@ -26,33 +27,22 @@ static inline unsigned find_boundary_interior_node(const mesh_block* blk, bounda
         case BOUNDARY_ID_EAST:
             return idx * blk->n2 + (blk->n2 - 1) - 1;
         case BOUNDARY_ID_WEST:
-            return blk->n2 * (blk->n1 - 1) - idx * blk->n2 * 1;
+            return blk->n2 * (blk->n1 - 1) - idx * blk->n2 + 1;
     }
+    return 0;
 }
 
 static inline void sort_array5(const uint32_t in[5], uint32_t order[5])
 {
-    uint32_t minidx = 0;
-    for (unsigned n = 1; n < 5; ++n)
+    for (unsigned i = 0; i < 5; ++i)
     {
-        if (in[n] < in[minidx])
+        const uint32_t v = in[i];
+        uint32_t idx = 0;
+        for (unsigned j = 0; j < 5; ++j)
         {
-            minidx = n;
+            idx += in[j] < v;
         }
-    }
-    order[0] = minidx;
-    for (unsigned m = 1; m < 5; ++m)
-    {
-        minidx = ~0u;
-        for (unsigned n = m; n < 5; ++n)
-        {
-            if (in[n] < in[minidx] && in[n] > in[order[m - 1]])
-            {
-                minidx = n;
-            }
-        }
-        assert(minidx != ~0u);
-        order[m] = minidx;
+        order[i] = idx;
     }
 }
 
@@ -79,7 +69,7 @@ static inline jmtx_result interior_point_equation(jmtxd_matrix_crs* mat, unsigne
             sort_array5(in_indices, sort_order);
             for (unsigned i = 0; i < 5; ++i)
             {
-                indices[i] = in_indices[sort_order[i]];
+                indices[sort_order[i]] = in_indices[i];
             }
             values[sort_order[2]] = -4;
         }
@@ -448,6 +438,18 @@ error_id mesh_create(unsigned int n_blocks, mesh_block* blocks, mesh* p_out)
     double* aux6 = calloc(point_cnt, sizeof*aux6);
     assert(aux6);
 
+    // printf("Matrix:\n[");
+    // for (unsigned i = 0; i < point_cnt; ++i)
+    // {
+    //     printf("[");
+    //     for (unsigned j = 0; j < point_cnt; ++j)
+    //     {
+    //         printf(" %3.g", jmtxd_matrix_crs_get_entry(system_matrix, i, j));
+    //     }
+    //     printf(" ]\n ");
+    // }
+    // printf("]\n");
+    // exit(EXIT_SUCCESS);
 
     jmtxd_solver_arguments args = 
     {
@@ -513,7 +515,7 @@ solvers_done:
     free(aux1);
 cleanup_matrix:
     jmtxd_matrix_crs_destroy(system_matrix);
-    if (res != MESH_SUCCESS)
+    if (ret != MESH_SUCCESS)
     {
         goto mtx_allocation_failed;
     }
