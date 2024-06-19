@@ -180,8 +180,8 @@ error_id mesh_create(unsigned int n_blocks, mesh_block* blocks, mesh* p_out)
             }
             else if (block->bwest.type == BOUNDARY_TYPE_CURVE)
             {
-                unsigned nb = block->bsouth.curve.n;
-                res = boundary_point_condition(system_matrix, offset + 0, block->bsouth.curve.x[nb-1], block->bsouth.curve.y[nb-1],
+                unsigned nb = block->bwest.curve.n;
+                res = boundary_point_condition(system_matrix, offset + 0, block->bwest.curve.x[nb-1], block->bwest.curve.y[nb-1],
                                               xrhs, yrhs);
                 if (res != JMTX_RESULT_SUCCESS)
                 {
@@ -535,4 +535,12 @@ mtx_allocation_failed:
 
 
     return ret;
+}
+
+void mesh_destroy(mesh* mesh)
+{
+    free(mesh->p_x);
+    free(mesh->p_y);
+    free(mesh->p_curves);
+    free(mesh->p_surfaces);
 }
