@@ -1,6 +1,8 @@
 #include <assert.h>
 #include <stdio.h>
 #include <math.h>
+#include <stdlib.h>
+
 #include "io.h"
 #include "mesh.h"
 
@@ -19,7 +21,7 @@ static void linespace(double x0, double x1, unsigned n, double* pout)
 
 int main(void)
 {
-    enum {NB1 = 8, NB2 = 7, NR = 6};
+    enum {NB1 = 200, NB2 = 200, NR = 200};
 
     double angle_right[NB1];
     double angle_left[NB1];
@@ -116,6 +118,10 @@ int main(void)
     mesh m = {0};
     error_id e = mesh_create(5, blocks, &m);
     assert(e == MESH_SUCCESS);
+    if (e != MESH_SUCCESS)
+    {
+        exit(EXIT_FAILURE);
+    }
     save_nodes_to_file("bigger.dat", m.n_points, m.p_x, m.p_y);
     mesh_destroy(&m);
     return 0;

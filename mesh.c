@@ -116,6 +116,7 @@ static inline jmtx_result solve_the_system_of_equations(unsigned npts, jmtxd_mat
     //  Is the problem small enough to solve for it directly?
     if (npts < DIRECT_SOLVER_LIMIT)
     {
+        printf("Running the direct solver on an %u by %u problem\n", npts, npts);
         res = jmtxd_convert_crs_to_brm(mat, &banded, NULL);
         if (res != JMTX_RESULT_SUCCESS)
         {
@@ -168,38 +169,48 @@ static inline jmtx_result solve_the_system_of_equations(unsigned npts, jmtxd_mat
 
     if (npts < GMRESR_SOLVER_LIMIT)
     {
+        printf("Running GMRESR on an %u by %u problem\n", npts, npts);
         jmtxd_matrix_brm* aux_mat_gmresr;
         res = jmtxd_matrix_brm_new(&aux_mat_gmresr, GMRESR_MLIM, GMRESR_MLIM, GMRESR_MLIM-1, 0, NULL, NULL);
         if (res != JMTX_RESULT_SUCCESS)
         {
             goto end;
         }
-
+        argsx.in_max_iterations = 64;
         jmtxd_solve_iterative_gmresr_crs(mat, xrhs, out_x, GMRESR_MLIM, GCR_TRUNCATION_LIM, aux_mat_gmresr,
         aux1, aux2, aux3, aux4, aux5, aux6, auxvecs1, auxvecs2, auxvecs3, &argsx);
+        printf("GMRESR for the x equation finished in %u iterations with an error of %g\n", argsx.out_last_iteration, argsx.out_last_error);
         if (!isfinite(argsx.out_last_error))
         {
             argsx.out_last_error = 1;
             memset(out_x, 0, npts*sizeof(*out_x));
         }
+        argsx.in_max_iterations = 1024;
+        argsy.in_max_iterations = 64;
         jmtxd_solve_iterative_gmresr_crs(mat, yrhs, out_y, GMRESR_MLIM, GCR_TRUNCATION_LIM, aux_mat_gmresr,
                 aux1, aux2, aux3, aux4, aux5, aux6, auxvecs1, auxvecs2, auxvecs3, &argsy);
+        printf("GMRESR for the y equation finished in %u iterations with an error of %g\n", argsx.out_last_iteration, argsx.out_last_error);
         if (!isfinite(argsy.out_last_error))
         {
             argsy.out_last_error = 1;
             memset(out_y, 0, npts*sizeof(*out_y));
         }
+        argsx.in_max_iterations = 1024;
 
         jmtxd_matrix_brm_destroy(aux_mat_gmresr);
     }
 
     if (argsx.out_last_error > argsx.in_convergence_criterion)
     {
+        printf("Running BICG-Stab on an %u by %u problem\n", npts, npts);
         r1 = jmtxd_solve_iterative_bicgstab_crs(mat, xrhs, out_x, aux1, aux2, aux3, aux4, aux5, aux6, &argsx);
+        printf("BICG-Stab for the x equation finished in %u iterations with an error of %g\n", argsx.out_last_iteration, argsx.out_last_error);
     }
     if (argsy.out_last_error > argsy.in_convergence_criterion)
     {
+        printf("Running BICG-Stab on an %u by %u problem\n", npts, npts);
         r2 = jmtxd_solve_iterative_bicgstab_crs(mat, xrhs, out_x, aux1, aux2, aux3, aux4, aux5, aux6, &argsy);
+        printf("BICG-Stab for the y equation finished in %u iterations with an error of %g\n", argsx.out_last_iteration, argsx.out_last_error);
     }
 
 end:
