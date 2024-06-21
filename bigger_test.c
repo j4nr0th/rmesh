@@ -21,7 +21,7 @@ static void linespace(double x0, double x1, unsigned n, double* pout)
 
 int main(void)
 {
-    enum {NB1 = 200, NB2 = 200, NR = 200};
+    enum {NB1 = 8, NB2 = 7, NR = 6};
 
     double angle_right[NB1];
     double angle_left[NB1];

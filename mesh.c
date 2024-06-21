@@ -9,6 +9,7 @@
 #include <assert.h>
 #include <math.h>
 #include <stdio.h>
+#include <time.h>
 
 #include <jmtx/double/matrices/band_row_major_safe.h>
 #include <jmtx/double/decompositions/band_lu_decomposition.h>
@@ -237,6 +238,49 @@ end:
 }
 
 
+static inline void free_block_info(block_info* info)
+{
+    free(info->points); info->points = NULL;
+    free(info->lines); info->lines = NULL;
+    free(info->surfaces); info->surfaces = NULL;
+}
+
+
+static inline unsigned point_boundary_index(const mesh_block* block, boundary_id id, unsigned idx)
+{
+    //  There is a flip that should be done
+    switch (id)
+    {
+    case BOUNDARY_ID_SOUTH:
+        return idx; //  from 0 to block->n2
+    case BOUNDARY_ID_NORTH:
+        return block->n2 * block->n1 - (idx + 1); //  from 0 to block->n2
+    case BOUNDARY_ID_WEST:
+        return block->n2 * (block->n1 - 1 - idx); //  from 0 to block->n1
+    case BOUNDARY_ID_EAST:
+        return idx * block->n2 + block->n2 - 1; //  from 0 to block->n1
+    }
+    return 0;
+}
+
+static inline unsigned point_boundary_index_flipped(const mesh_block* block, boundary_id id, unsigned idx)
+{
+    //  There is a flip that should be done
+    switch (id)
+    {
+    case BOUNDARY_ID_SOUTH:
+        return block->n2 - 1 - idx; //  from 0 to block->n2
+    case BOUNDARY_ID_NORTH:
+        return block->n2 * (block->n1 - 1) + idx; //  from 0 to block->n2
+    case BOUNDARY_ID_WEST:
+        return block->n2 * idx; //  from 0 to block->n1
+    case BOUNDARY_ID_EAST:
+        return block->n2 * (block->n1 - idx) - 1; //  from 0 to block->n1
+    }
+    return 0;
+}
+
+
 error_id mesh_create(unsigned int n_blocks, mesh_block* blocks, mesh* p_out)
 {
     error_id ret = MESH_SUCCESS;
@@ -285,8 +329,12 @@ error_id mesh_create(unsigned int n_blocks, mesh_block* blocks, mesh* p_out)
     jmtx_result res = jmtxds_matrix_crs_new(&system_matrix, point_cnt, point_cnt, 4*point_cnt, NULL);
     if (res != JMTX_RESULT_SUCCESS)
     {
-        ret = MESH_ALLOCATION_FAILED;
-        goto mtx_allocation_failed;
+        free(ynodal);
+        free(xnodal);
+        free(yrhs);
+        free(xrhs);
+        free(block_offsets);
+        return MESH_ALLOCATION_FAILED;
     }
 
     for (unsigned iblock = 0; iblock < n_blocks; ++iblock)
@@ -574,18 +622,160 @@ cleanup_matrix:
     jmtxd_matrix_crs_destroy(system_matrix);
     if (ret != MESH_SUCCESS)
     {
-        goto mtx_allocation_failed;
+        free(ynodal);
+        free(xnodal);
+        free(yrhs);
+        free(xrhs);
+        free(block_offsets);
+        return ret;
     }
+
+    //  Remove duplicate points by averaging over them
+    block_info* info = calloc(n_blocks, sizeof*info);
+    assert(info);
+    for (unsigned i = 0; i < n_blocks; ++i)
+    {
+        info[i].n1 = blocks[i].n1;
+        info[i].n2 = blocks[i].n2;
+        info[i].points = calloc(blocks[i].n1 * blocks[i].n2, sizeof(*info[i].points));
+        assert(info[i].points);
+        memset(info[i].points, ~0u, blocks[i].n1 * blocks[i].n2 * sizeof(*info[i].points));
+        info[i].lines = calloc(blocks[i].n1 * (blocks[i].n2 - 1) + (blocks[i].n1 - 1) * blocks[i].n2, sizeof(*info[i].lines));
+        assert(info[i].lines);
+        info[i].surfaces = calloc((blocks[i].n1 - 1) * (blocks[i].n2 - 1), sizeof(*info[i].surfaces));
+        assert(info[i].surfaces);
+    }
+    unsigned unique_pts = 0;
+    unsigned* division_factor = calloc(point_cnt, sizeof*division_factor);
+    assert(division_factor);
+    double* newx = calloc(point_cnt, sizeof*newx);
+    double* newy = calloc(point_cnt, sizeof*newy);
+    assert(newx);
+    assert(newy);
+
+    for (unsigned i = 0; i < n_blocks; ++i)
+    {
+        const block_info* bi = info + i;
+        const mesh_block* b = blocks + i;
+        unsigned iother;
+        // unsigned duplicate = 0;
+        if (b->bnorth.type == BOUNDARY_TYPE_BLOCK && (iother = (b->bnorth.block.target - blocks)) < i)
+        {
+            for (unsigned j = 0; j < b->bnorth.n; ++j)
+            {
+                unsigned other_idx = info[iother].points[point_boundary_index_flipped(b->bnorth.block.target, (b->bnorth.block.target_id), j)];
+                unsigned this_idx = point_boundary_index(b, BOUNDARY_ID_NORTH, j);
+                newx[other_idx] += xnodal[this_idx + block_offsets[i]];
+                newy[other_idx] += ynodal[this_idx + block_offsets[i]];
+                bi->points[this_idx] = other_idx;
+                division_factor[other_idx] += 1;
+            }
+            // duplicate += b->bnorth.n;
+        }
+        if (b->bsouth.type == BOUNDARY_TYPE_BLOCK && (iother = (b->bsouth.block.target - blocks)) < i)
+        {
+            for (unsigned j = 0; j < b->bsouth.n; ++j)
+            {
+                unsigned other_idx = info[iother].points[point_boundary_index_flipped(b->bsouth.block.target, (b->bsouth.block.target_id), j)];
+                unsigned this_idx = point_boundary_index(b, BOUNDARY_ID_SOUTH, j);
+                newx[other_idx] += xnodal[this_idx + block_offsets[i]];
+                newy[other_idx] += ynodal[this_idx + block_offsets[i]];
+                bi->points[this_idx] = other_idx;
+                division_factor[other_idx] += 1;
+            }
+            // duplicate += b->bsouth.n;
+        }
+        if (b->beast.type == BOUNDARY_TYPE_BLOCK && (iother = (b->beast.block.target - blocks)) < i)
+        {
+            for (unsigned j = 0; j < b->beast.n; ++j)
+            {
+                unsigned other_idx = info[iother].points[point_boundary_index_flipped(b->beast.block.target, (b->beast.block.target_id), j)];
+                unsigned this_idx = point_boundary_index(b, BOUNDARY_ID_EAST, j);
+                newx[other_idx] += xnodal[this_idx + block_offsets[i]];
+                newy[other_idx] += ynodal[this_idx + block_offsets[i]];
+                bi->points[this_idx] = other_idx;
+                division_factor[other_idx] += 1;
+            }
+            // duplicate += (b->beast.n - (bi->points[b->n2 - 1] != ~0u) - (bi->points[b->n2 * b->n1 - 1] != ~0u));
+        }
+        if (b->bwest.type == BOUNDARY_TYPE_BLOCK && (iother = (b->bwest.block.target - blocks)) < i)
+        {
+            for (unsigned j = 0; j < b->bwest.n; ++j)
+            {
+                unsigned other_idx = info[iother].points[point_boundary_index_flipped(b->bwest.block.target, (b->bwest.block.target_id), j)];
+                unsigned this_idx = point_boundary_index(b, BOUNDARY_ID_WEST, j);
+                newx[other_idx] += xnodal[this_idx + block_offsets[i]];
+                newy[other_idx] += ynodal[this_idx + block_offsets[i]];
+                bi->points[this_idx] = other_idx;
+                division_factor[other_idx] += 1;
+            }
+            // duplicate += (b->beast.n - (bi->points[0] != ~0u) - (bi->points[b->n2 * (b->n1 - 1)] != ~0u));
+        }
+        // unsigned new_pts = b->n1 * b->n2 - duplicate;
+        // unsigned offset = unique_pts;
+        for (unsigned row = 0; row < b->n1; ++row)
+        {
+            for (unsigned col = 0; col < b->n2; ++col)
+            {
+                geo_id idx = col + row * b->n2;
+                if (bi->points[idx] == ~0u)
+                {
+                    bi->points[idx] = unique_pts;
+                    newx[unique_pts] = xnodal[block_offsets[i] + idx];
+                    newy[unique_pts] = ynodal[block_offsets[i] + idx];
+                    assert(division_factor[unique_pts] == 0);
+                    division_factor[unique_pts] = 1;
+                    unique_pts += 1;
+                }
+            }
+        }
+        // unsigned new_pts = unique_pts - offset;
+    }
+
+    for (unsigned i = 0; i < unique_pts; ++i)
+    {
+        assert(division_factor[i] != 0);
+        const double d = 1.0/(double)division_factor[i];
+        newx[i] *= d;
+        newy[i] *= d;
+    }
+
+    {
+        double* tmp = realloc(newx, unique_pts * sizeof*newx);
+        assert(tmp);
+        newx = tmp;
+    }
+    {
+        double* tmp = realloc(newy, unique_pts * sizeof*newy);
+        assert(tmp);
+        newy = tmp;
+    }
+    free(division_factor);
+
+    free(xnodal);
+    xnodal = newx;
+    free(ynodal);
+    ynodal = newy;
 
     if (ret == MESH_SUCCESS)
     {
-        p_out->n_points = point_cnt;
+        p_out->n_blocks = n_blocks;
         p_out->p_x = xnodal;
         p_out->p_y = ynodal;
+        p_out->block_info = info;
+        p_out->n_points = unique_pts;
+        info = NULL;
         xnodal = NULL;
         ynodal = NULL;
     }
-mtx_allocation_failed:
+    if (info)
+    {
+        for (unsigned i = 0; i < n_blocks; ++i)
+        {
+            free_block_info(info + i);
+        }
+        free(info);
+    }
     free(ynodal);
     free(xnodal);
     free(yrhs);
@@ -602,4 +792,9 @@ void mesh_destroy(mesh* mesh)
     free(mesh->p_y);
     free(mesh->p_curves);
     free(mesh->p_surfaces);
+    for (unsigned i = 0; i < mesh->n_blocks; ++i)
+    {
+        free_block_info(mesh->block_info + i);
+    }
+    free(mesh->block_info);
 }
