@@ -8,7 +8,7 @@
 #include "err.h"
 
 
-typedef unsigned geo_id;
+typedef int geo_id;
 
 typedef struct curve_struct curve;
 struct curve_struct

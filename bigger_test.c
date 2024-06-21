@@ -122,7 +122,8 @@ int main(void)
     {
         exit(EXIT_FAILURE);
     }
-    save_nodes_to_file("bigger.dat", m.n_points, m.p_x, m.p_y);
+    save_nodes_to_file("bigger_pts.dat", m.n_points, m.p_x, m.p_y);
+    save_lines_to_file("bigger_lns.dat", m.n_curves, m.p_curves);
     mesh_destroy(&m);
     return 0;
 }

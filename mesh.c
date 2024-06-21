@@ -280,11 +280,75 @@ static inline unsigned point_boundary_index_flipped(const mesh_block* block, bou
     return 0;
 }
 
+static inline unsigned line_boundary_index(const mesh_block* block, boundary_id id, unsigned idx)
+{
+    switch (id)
+    {
+    case BOUNDARY_ID_SOUTH:
+        return idx; //  From 0 to block->n2 - 1
+    case BOUNDARY_ID_NORTH:
+        return (block->n1 - 1) * (block->n2 - 1) + idx; //  From 0 to block->n2 - 1
+    case BOUNDARY_ID_WEST:
+        return block->n1 * (block->n2 - 1) + idx; //    From 0 to block->n1 - 1
+    case BOUNDARY_ID_EAST:
+        return block->n1 * (block->n2 - 1) + (block->n1 - 1) * (block->n2 - 1) + idx; //    From 0 to block->n1 - 1
+    }
+    return 0;
+}
+
+static inline unsigned line_boundary_index_reverse(const mesh_block* block, boundary_id id, unsigned idx)
+{
+    switch (id)
+    {
+    case BOUNDARY_ID_SOUTH:
+        return ((block->n2 - 1) - idx); //  From 0 to block->n2 - 1
+    case BOUNDARY_ID_NORTH:
+        return ((block->n1) * (block->n2 - 1) - (idx + 1)); //  From 0 to block->n2 - 1
+    case BOUNDARY_ID_WEST:
+        return (block->n1 * (block->n2 - 1) + (block->n1 - 1 - idx)); //    From 0 to block->n1 - 1
+    case BOUNDARY_ID_EAST:
+        return (block->n1 * (block->n2 - 1) + (block->n1 - 1) * (block->n2) + (block->n1 - 1 - idx)); //    From 0 to block->n1 - 1
+    }
+    return 0;
+}
+
+static inline void deal_with_line_boundary(const boundary_block* boundary, const block_info* info_owner, const block_info* info_target)
+{
+    static const int bnd_map[] =
+        {
+        [BOUNDARY_ID_NORTH] = 1,
+        [BOUNDARY_ID_SOUTH] = -1,
+        [BOUNDARY_ID_EAST] = 1,
+        [BOUNDARY_ID_WEST] = -1,
+        };
+    //  When this is 1 we reverse, when it's -1 we do not
+    const int reversed = bnd_map[boundary->id1] * bnd_map[boundary->target_id];
+    if (reversed > 0)
+    {
+        for (unsigned i = 0; i < boundary->n - 1; ++i)
+        {
+            geo_id iother = -info_target->lines[line_boundary_index_reverse(boundary->target, boundary->target_id, i)];
+            unsigned this_idx = line_boundary_index(boundary->b1, boundary->id1, i);
+            info_owner->lines[this_idx] = iother;
+        }
+    }
+    else
+    {
+        for (unsigned i = 0; i < boundary->n - 1; ++i)
+        {
+            geo_id iother = info_target->lines[line_boundary_index(boundary->target, boundary->target_id, i)];
+            unsigned this_idx = line_boundary_index(boundary->b1, boundary->id1, i);
+            info_owner->lines[this_idx] = iother;
+        }
+    }
+}
+
 
 error_id mesh_create(unsigned int n_blocks, mesh_block* blocks, mesh* p_out)
 {
     error_id ret = MESH_SUCCESS;
     unsigned point_cnt = 0;
+    unsigned max_lines = 0;
     unsigned* block_offsets = calloc(n_blocks, sizeof*block_offsets);
     assert(block_offsets);
     memset(block_offsets, 0, n_blocks * sizeof(*block_offsets));
@@ -314,6 +378,7 @@ error_id mesh_create(unsigned int n_blocks, mesh_block* blocks, mesh* p_out)
             block_offsets[iblk + 1] = npts + block_offsets[iblk];
         }
         point_cnt += npts;
+        max_lines += (blk->n1 - 1) * blk->n2 + blk->n1 * (blk->n2 - 1);
     }
 
     double* xrhs = calloc(point_cnt, sizeof*xrhs);
@@ -658,6 +723,7 @@ cleanup_matrix:
         const block_info* bi = info + i;
         const mesh_block* b = blocks + i;
         unsigned iother;
+        int hasn = 0, hass = 0, hase = 0, hasw = 0;
         // unsigned duplicate = 0;
         if (b->bnorth.type == BOUNDARY_TYPE_BLOCK && (iother = (b->bnorth.block.target - blocks)) < i)
         {
@@ -670,6 +736,7 @@ cleanup_matrix:
                 bi->points[this_idx] = other_idx;
                 division_factor[other_idx] += 1;
             }
+            hasn = 1;
             // duplicate += b->bnorth.n;
         }
         if (b->bsouth.type == BOUNDARY_TYPE_BLOCK && (iother = (b->bsouth.block.target - blocks)) < i)
@@ -683,6 +750,7 @@ cleanup_matrix:
                 bi->points[this_idx] = other_idx;
                 division_factor[other_idx] += 1;
             }
+            hass = 1;
             // duplicate += b->bsouth.n;
         }
         if (b->beast.type == BOUNDARY_TYPE_BLOCK && (iother = (b->beast.block.target - blocks)) < i)
@@ -696,6 +764,7 @@ cleanup_matrix:
                 bi->points[this_idx] = other_idx;
                 division_factor[other_idx] += 1;
             }
+            hase = 1;
             // duplicate += (b->beast.n - (bi->points[b->n2 - 1] != ~0u) - (bi->points[b->n2 * b->n1 - 1] != ~0u));
         }
         if (b->bwest.type == BOUNDARY_TYPE_BLOCK && (iother = (b->bwest.block.target - blocks)) < i)
@@ -709,16 +778,17 @@ cleanup_matrix:
                 bi->points[this_idx] = other_idx;
                 division_factor[other_idx] += 1;
             }
+            hasw = 1;
             // duplicate += (b->beast.n - (bi->points[0] != ~0u) - (bi->points[b->n2 * (b->n1 - 1)] != ~0u));
         }
         // unsigned new_pts = b->n1 * b->n2 - duplicate;
         // unsigned offset = unique_pts;
-        for (unsigned row = 0; row < b->n1; ++row)
+        for (unsigned row = hass; row < b->n1 - hasn; ++row)
         {
-            for (unsigned col = 0; col < b->n2; ++col)
+            for (unsigned col = hasw; col < b->n2-hase; ++col)
             {
                 geo_id idx = col + row * b->n2;
-                if (bi->points[idx] == ~0u)
+                if (bi->points[idx] == ~0)
                 {
                     bi->points[idx] = unique_pts;
                     newx[unique_pts] = xnodal[block_offsets[i] + idx];
@@ -756,6 +826,73 @@ cleanup_matrix:
     xnodal = newx;
     free(ynodal);
     ynodal = newy;
+    curve* line_array = calloc(max_lines, sizeof(*line_array));
+    assert(line_array);
+
+    // Create mesh line info
+    unsigned line_count = 1;
+    for (unsigned i = 0; i < n_blocks; ++i)
+    {
+        const block_info* bi = info + i;
+        const mesh_block* b = blocks + i;
+        unsigned hasn = 0, hass = 0, hase = 0, hasw = 0;
+        unsigned iother;
+        if (b->bnorth.type == BOUNDARY_TYPE_BLOCK && (iother = (b->bnorth.block.target - blocks)) < i)
+        {
+            deal_with_line_boundary(&b->bnorth.block, info + i, info + iother);
+            hasn = 1;
+        }
+        if (b->bsouth.type == BOUNDARY_TYPE_BLOCK && (iother = (b->bsouth.block.target - blocks)) < i)
+        {
+            deal_with_line_boundary(&b->bsouth.block, info + i, info + iother);
+            hass = 1;
+        }
+        if (b->beast.type == BOUNDARY_TYPE_BLOCK && (iother = (b->beast.block.target - blocks)) < i)
+        {
+            deal_with_line_boundary(&b->beast.block, info + i, info + iother);
+            hase = 1;
+        }
+        if (b->bwest.type == BOUNDARY_TYPE_BLOCK && (iother = (b->bwest.block.target - blocks)) < i)
+        {
+            deal_with_line_boundary(&b->bwest.block, info + i, info + iother);
+            hasw = 1;
+        }
+
+        for (unsigned row = hass; row < b->n1 - hasn; ++row)
+        {
+            for (unsigned col = 0; col < b->n2 - 1; ++col)
+            {
+                unsigned idx = row * b->n2 + col;
+                unsigned n1 = bi->points[idx];
+                unsigned n2 = bi->points[idx + 1];
+                bi->lines[row * (b->n2 - 1) + col] = line_count;
+                line_array[line_count - 1] = (curve){.pt1 = n1, .pt2 = n2};
+                line_count += 1;
+            }
+        }
+
+        for (unsigned col = hasw; col < b->n2 - hase; ++col)
+        {
+            for (unsigned row = 0; row < b->n1 - 1; ++row)
+            {
+                unsigned idx = row * b->n2 + col;
+                unsigned n1 = bi->points[idx];
+                unsigned n2 = bi->points[idx + b->n2];
+                bi->lines[(b->n2 - 1) * b->n1 + col * (b->n1 - 1) + row] = line_count;
+                line_array[line_count - 1] = (curve){.pt1 = n1, .pt2 = n2};
+                line_count += 1;
+            }
+        }
+        for (unsigned j = 0; j < (b->n2 - 1) * b->n1 + b->n2 * (b->n1 - 1); ++j)
+        {
+            assert(bi->lines[i] != 0);
+        }
+    }
+    line_count -= 1;
+
+
+
+
 
     if (ret == MESH_SUCCESS)
     {
@@ -764,6 +901,9 @@ cleanup_matrix:
         p_out->p_y = ynodal;
         p_out->block_info = info;
         p_out->n_points = unique_pts;
+        p_out->n_curves = line_count;
+        p_out->p_curves = line_array;
+        line_array = NULL;
         info = NULL;
         xnodal = NULL;
         ynodal = NULL;
