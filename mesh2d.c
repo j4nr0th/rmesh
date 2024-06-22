@@ -2,10 +2,9 @@
 // Created by jan on 15.6.2024.
 //
 
-#include "mesh.h"
+#include "mesh2d.h"
 #include <jmtx/double/matrices/sparse_row_compressed_safe.h>
 #include <jmtx/double/solvers/bicgstab_iteration.h>
-#include <jmtx/double/solvers/gauss_seidel_iteration.h>
 #include <assert.h>
 #include <math.h>
 #include <stdio.h>
@@ -20,7 +19,7 @@
 #include "jmtx/double/solvers/recursive_generalized_minimum_residual_iteration.h"
 
 
-static inline unsigned find_boundary_interior_node(const mesh_block* blk, boundary_id t, unsigned idx)
+static inline unsigned find_boundary_interior_node(const block_info* blk, const boundary_id t, const unsigned idx)
 {
     switch (t)
     {
@@ -50,8 +49,9 @@ static inline void sort_array5(const uint32_t in[5], uint32_t order[5])
     }
 }
 
-static inline jmtx_result interior_point_equation(jmtxd_matrix_crs* mat, unsigned idx, unsigned left, unsigned right,
-                                                  unsigned top, unsigned btm, double* vx, double* vy, int sort)
+static inline jmtx_result interior_point_equation(jmtxd_matrix_crs* mat, const unsigned idx, const  unsigned left,
+                                                  const  unsigned right, const unsigned top, const  unsigned btm,
+                                                  double* vx, double* vy, const int sort)
 {
     uint32_t indices[5] = {btm, left, idx, right, top};
     double values[5] = {1, 1, 1, 1, 1};
@@ -91,13 +91,13 @@ static inline jmtx_result interior_point_equation(jmtxd_matrix_crs* mat, unsigne
     return jmtxds_matrix_crs_set_row(mat, idx, 5, indices, values);
 }
 
-static inline jmtx_result boundary_point_condition(jmtxd_matrix_crs* mat, unsigned idx, double x, double y,
+static inline jmtx_result boundary_point_condition(jmtxd_matrix_crs* mat, const unsigned idx, const double x, const double y,
                                                   double* vx, double* vy)
 {
     vx[idx] = x;
     vy[idx] = y;
-    uint32_t index = idx;
-    double value = 1;
+    const uint32_t index = idx;
+    const double value = 1;
     return jmtxds_matrix_crs_set_row(mat, idx, 1, &index, &value);
 }
 
@@ -106,7 +106,7 @@ enum {DIRECT_SOLVER_LIMIT = (1 << 12), GMRESR_SOLVER_LIMIT = (1 << 18), GOD_HELP
     GCR_TRUNCATION_LIM = (1 << 7)};
 
 
-static inline jmtx_result solve_the_system_of_equations(unsigned npts, jmtxd_matrix_crs* mat,
+static inline jmtx_result solve_the_system_of_equations(const unsigned npts, const jmtxd_matrix_crs* mat,
     double xrhs[const restrict static npts], double yrhs[const restrict static npts],
     double out_x[const restrict npts], double out_y[const restrict npts])
 {
@@ -246,7 +246,7 @@ static inline void free_block_info(block_info* info)
 }
 
 
-static inline unsigned point_boundary_index(const mesh_block* block, boundary_id id, unsigned idx)
+static inline unsigned point_boundary_index(const block_info* block, const boundary_id id, const unsigned idx)
 {
     //  There is a flip that should be done
     switch (id)
@@ -263,7 +263,7 @@ static inline unsigned point_boundary_index(const mesh_block* block, boundary_id
     return 0;
 }
 
-static inline unsigned point_boundary_index_flipped(const mesh_block* block, boundary_id id, unsigned idx)
+static inline unsigned point_boundary_index_flipped(const block_info* block, const boundary_id id, const unsigned idx)
 {
     //  There is a flip that should be done
     switch (id)
@@ -280,7 +280,7 @@ static inline unsigned point_boundary_index_flipped(const mesh_block* block, bou
     return 0;
 }
 
-static inline unsigned line_boundary_index(const mesh_block* block, boundary_id id, unsigned idx)
+static inline unsigned line_boundary_index(const block_info* block, const boundary_id id, const unsigned idx)
 {
     switch (id)
     {
@@ -296,7 +296,7 @@ static inline unsigned line_boundary_index(const mesh_block* block, boundary_id 
     return 0;
 }
 
-static inline unsigned line_boundary_index_reverse(const mesh_block* block, boundary_id id, unsigned idx)
+static inline unsigned line_boundary_index_reverse(const block_info* block, const boundary_id id, const unsigned idx)
 {
     switch (id)
     {
@@ -327,8 +327,8 @@ static inline void deal_with_line_boundary(const boundary_block* boundary, const
     {
         for (unsigned i = 0; i < boundary->n - 1; ++i)
         {
-            geo_id iother = -info_target->lines[line_boundary_index_reverse(boundary->target, boundary->target_id, i)];
-            unsigned this_idx = line_boundary_index(boundary->b1, boundary->id1, i);
+            const geo_id iother = -info_target->lines[line_boundary_index_reverse(info_target, boundary->target_id, i)];
+            const unsigned this_idx = line_boundary_index(info_owner, boundary->id1, i);
             info_owner->lines[this_idx] = iother;
         }
     }
@@ -336,398 +336,43 @@ static inline void deal_with_line_boundary(const boundary_block* boundary, const
     {
         for (unsigned i = 0; i < boundary->n - 1; ++i)
         {
-            geo_id iother = info_target->lines[line_boundary_index(boundary->target, boundary->target_id, i)];
-            unsigned this_idx = line_boundary_index(boundary->b1, boundary->id1, i);
+            const geo_id iother = info_target->lines[line_boundary_index(info_target, boundary->target_id, i)];
+            const unsigned this_idx = line_boundary_index(info_owner, boundary->id1, i);
             info_owner->lines[this_idx] = iother;
         }
     }
 }
 
 
-error_id mesh_create(unsigned int n_blocks, mesh_block* blocks, mesh* p_out)
+typedef struct mesh2d_geo_args_struct mesh_geo_args;
+struct mesh2d_geo_args_struct
 {
-    error_id ret = MESH_SUCCESS;
-    unsigned point_cnt = 0;
-    unsigned max_lines = 0;
-    unsigned max_surfaces = 0;
-    unsigned* block_offsets = calloc(n_blocks, sizeof*block_offsets);
-    assert(block_offsets);
-    memset(block_offsets, 0, n_blocks * sizeof(*block_offsets));
-    for (unsigned iblk = 0; iblk < n_blocks; ++iblk)
-    {
-        mesh_block* const blk = blocks + iblk;
-        //  Check mesh boundaries and compute each block's size
-        unsigned nnorth = blk->bnorth.n;
-        unsigned nsouth = blk->bsouth.n;
-        if (nnorth != nsouth)
-        {
-            return MESH_BOUNDARY_SIZE_MISMATCH;
-        }
-        unsigned neast = blk->beast.n;
-        unsigned nwest = blk->bwest.n;
-        if (neast != nwest)
-        {
-            return MESH_BOUNDARY_SIZE_MISMATCH;
-        }
-
-        unsigned npts = nnorth * neast;
-        blk->n1 = neast;
-        blk->n2 = nnorth;
-        blk->npts = npts;
-        if (iblk != n_blocks - 1)
-        {
-            block_offsets[iblk + 1] = npts + block_offsets[iblk];
-        }
-        point_cnt += npts;
-        max_lines += (blk->n1 - 1) * blk->n2 + blk->n1 * (blk->n2 - 1);
-        max_surfaces += (blk->n1 - 1) * (blk->n2 - 1);
-    }
-
-    double* xrhs = calloc(point_cnt, sizeof*xrhs);
-    assert(xrhs);
-    double* yrhs = calloc(point_cnt, sizeof*yrhs);
-    assert(yrhs);
-    double* xnodal = calloc(point_cnt, sizeof*xnodal);
-    assert(xnodal);
-    double* ynodal = calloc(point_cnt, sizeof*ynodal);
-    assert(ynodal);
-
-    jmtxd_matrix_crs* system_matrix;
-    jmtx_result res = jmtxds_matrix_crs_new(&system_matrix, point_cnt, point_cnt, 4*point_cnt, NULL);
-    if (res != JMTX_RESULT_SUCCESS)
-    {
-        free(ynodal);
-        free(xnodal);
-        free(yrhs);
-        free(xrhs);
-        free(block_offsets);
-        return MESH_ALLOCATION_FAILED;
-    }
-
-    for (unsigned iblock = 0; iblock < n_blocks; ++iblock)
-    {
-        const mesh_block* block = blocks + iblock;
-        const unsigned offset = block_offsets[iblock];
-
-        //  South side of the mesh
-        {
-            //  South West side
-            if (block->bsouth.type == BOUNDARY_TYPE_CURVE)
-            {
-                res = boundary_point_condition(system_matrix, offset + 0, block->bsouth.curve.x[0], block->bsouth.curve.y[0],
-                                        xrhs, yrhs);
-                if (res != JMTX_RESULT_SUCCESS)
-                {
-                    ret = MESH_MATRIX_FAILURE;
-                    goto cleanup_matrix;
-                }
-            }
-            else if (block->bwest.type == BOUNDARY_TYPE_CURVE)
-            {
-                unsigned nb = block->bwest.curve.n;
-                res = boundary_point_condition(system_matrix, offset + 0, block->bwest.curve.x[nb-1], block->bwest.curve.y[nb-1],
-                                              xrhs, yrhs);
-                if (res != JMTX_RESULT_SUCCESS)
-                {
-                    ret = MESH_MATRIX_FAILURE;
-                    goto cleanup_matrix;
-                }
-            }
-            else
-            {
-                const boundary_block* sb = &block->bsouth.block, *wb = &block->bwest.block;
-                unsigned offset_wb = block_offsets[wb->target - blocks];
-                unsigned offset_sb = block_offsets[sb->target - blocks];
-                res = interior_point_equation(system_matrix, offset + 0, offset_wb +
-                find_boundary_interior_node(wb->target, wb->target_id, 0), offset + 1, offset + block->n2,
-                offset_sb + find_boundary_interior_node(sb->target, sb->target_id, block->n2 - 1), xrhs, yrhs, 1);
-                if (res != JMTX_RESULT_SUCCESS)
-                {
-                    ret = MESH_MATRIX_FAILURE;
-                    goto cleanup_matrix;
-                }
-            }
-
-            //  South side
-            if (block->bsouth.type == BOUNDARY_TYPE_BLOCK)
-            {
-                const boundary_block* sb = &block->bsouth.block;
-                unsigned offset_sb = block_offsets[sb->target - blocks];
-                for (unsigned j = 1; j < block->n2 - 1; ++j)
-                {
-                    res = interior_point_equation(system_matrix, offset + j, offset + j - 1, offset + j + 1, offset + j + block->n2, offset_sb + find_boundary_interior_node(sb->target, sb->target_id, block->n2 - 1 - j), xrhs, yrhs, 1);
-                    if (res != JMTX_RESULT_SUCCESS)
-                    {
-                        ret = MESH_MATRIX_FAILURE;
-                        goto cleanup_matrix;
-                    }
-                }
-            }
-            else
-            {
-                assert(block->bsouth.type == BOUNDARY_TYPE_CURVE);
-                for (unsigned j = 1; j < block->n2 - 1; ++j)
-                {
-                    res = boundary_point_condition(system_matrix, offset + j, block->bsouth.curve.x[j], block->bsouth.curve.y[j], xrhs, yrhs);
-                    if (res != JMTX_RESULT_SUCCESS)
-                    {
-                        ret = MESH_MATRIX_FAILURE;
-                        goto cleanup_matrix;
-                    }
-                }
-            }
-            //  South East corner
-            if (block->bsouth.type == BOUNDARY_TYPE_CURVE)
-            {
-                unsigned ns = block->bsouth.n;
-                res = boundary_point_condition(system_matrix, offset + block->n2 - 1, block->bsouth.curve.x[ns - 1], block->bsouth.curve.y[ns - 1], xrhs, yrhs);
-                if (res != JMTX_RESULT_SUCCESS)
-                {
-                    ret = MESH_MATRIX_FAILURE;
-                    goto cleanup_matrix;
-                }
-            }
-            else if (block->beast.type == BOUNDARY_TYPE_CURVE)
-            {
-                res = boundary_point_condition(system_matrix, offset + block->n2 - 1, block->beast.curve.x[0], block->beast.curve.y[0], xrhs, yrhs);
-                if (res != JMTX_RESULT_SUCCESS)
-                {
-                    ret = MESH_MATRIX_FAILURE;
-                    goto cleanup_matrix;
-                }
-            }
-            else
-            {
-                const boundary_block* eb = &block->beast.block, * sb = &block->bsouth.block;
-                unsigned offset_eb = block_offsets[eb->target - blocks];
-                unsigned offset_sb = block_offsets[sb->target - blocks];
-                res = interior_point_equation(system_matrix, offset + block->n2-1, offset + block->n2-2, offset_eb + find_boundary_interior_node(eb->target, eb->target_id, block->n1 - 1), offset + 2*block->n2-1, offset_sb + find_boundary_interior_node(sb->target, sb->target_id, 0), xrhs, yrhs, 1);
-                if (res != JMTX_RESULT_SUCCESS)
-                {
-                    ret = MESH_MATRIX_FAILURE;
-                    goto cleanup_matrix;
-                }
-            }
-        }
-        //  Interior of the block
-        {
-            for (unsigned i = 1; i < block->n1-1; ++i)
-            {
-                //   West edge
-                {
-                    unsigned pos = block->n2 * i  + offset;
-                    if (block->bwest.type == BOUNDARY_TYPE_CURVE)
-                    {
-                        res = boundary_point_condition(system_matrix, pos, block->bwest.curve.x[block->n1-i-1], block->bwest.curve.y[block->n1-i-1], xrhs, yrhs);
-                        if (res != JMTX_RESULT_SUCCESS)
-                        {
-                            ret = MESH_MATRIX_FAILURE;
-                            goto cleanup_matrix;
-                        }
-                    }
-                    else
-                    {
-                        const boundary_block* wb = &block->bwest.block;
-                        unsigned offset_wb = block_offsets[wb->target - blocks];
-                        res = interior_point_equation(system_matrix, pos, offset_wb + find_boundary_interior_node(wb->target, wb->target_id, i), pos + 1, pos + block->n2, pos - block->n2, xrhs, yrhs, 1);
-                        if (res != JMTX_RESULT_SUCCESS)
-                        {
-                            ret = MESH_MATRIX_FAILURE;
-                            goto cleanup_matrix;
-                        }
-                    }
-                }
-                //  Interior
-                for (unsigned j = 1; j < block->n2-1; ++j)
-                {
-                    unsigned pos = j + block->n2 * i  + offset;
-                    res = interior_point_equation(system_matrix, pos, pos-1, pos+1, pos+block->n2, pos-block->n2, xrhs, yrhs, 0);
-                    if (res != JMTX_RESULT_SUCCESS)
-                    {
-                        ret = MESH_MATRIX_FAILURE;
-                        goto cleanup_matrix;
-                    }
-                }
-                //   East edge
-                {
-                    unsigned pos = block->n2 * i + block->n2 - 1 + offset;
-                    if (block->beast.type == BOUNDARY_TYPE_CURVE)
-                    {
-                        res = boundary_point_condition(system_matrix, pos, block->beast.curve.x[i], block->beast.curve.y[i], xrhs, yrhs);
-                        if (res != JMTX_RESULT_SUCCESS)
-                        {
-                            ret = MESH_MATRIX_FAILURE;
-                            goto cleanup_matrix;
-                        }
-                    }
-                    else
-                    {
-                        const boundary_block* eb = &block->beast.block;
-                        unsigned offset_eb = block_offsets[eb->target - blocks];
-                        res = interior_point_equation(system_matrix, pos, pos - 1, offset_eb + find_boundary_interior_node(eb->target, eb->target_id, block->n1 - 1 - i), pos + block->n2, pos - block->n2, xrhs, yrhs, 1);
-                        if (res != JMTX_RESULT_SUCCESS)
-                        {
-                            ret = MESH_MATRIX_FAILURE;
-                            goto cleanup_matrix;
-                        }
-                    }
-                }
-            }
-        }
+    unsigned point_cnt;
+    unsigned max_lines;
+    unsigned max_surfaces;
+    unsigned* block_offsets;
+    const double* xnodal;
+    const double* ynodal;
+    block_info* info;
+};
 
 
-        //   North side
-        //       North West corner
-        {
-            if (block->bnorth.type == BOUNDARY_TYPE_CURVE)
-            {
-                // valx = block.boundary_n.x[-1]; valy = block.boundary_n.y[-1]
-                unsigned nb = block->bnorth.n;
-                res = boundary_point_condition(system_matrix, offset + (block->n1 - 1) * block->n2, block->bnorth.curve.x[nb - 1], block->bnorth.curve.y[nb - 1], xrhs, yrhs);
-                if (res != JMTX_RESULT_SUCCESS)
-                {
-                    ret = MESH_MATRIX_FAILURE;
-                    goto cleanup_matrix;
-                }
-            }
-            else if (block->bwest.type == BOUNDARY_TYPE_CURVE)
-            {
-                // valx = block.boundary_w.x[0]; valy = block.boundary_w.y[0]
-                res = boundary_point_condition(system_matrix, offset + (block->n1 - 1) * block->n2, block->bwest.curve.x[0], block->bwest.curve.y[0], xrhs, yrhs);
-                if (res != JMTX_RESULT_SUCCESS)
-                {
-                    ret = MESH_MATRIX_FAILURE;
-                    goto cleanup_matrix;
-                }
-            }
-            else
-            {
-                const boundary_block* wb = &block->bwest.block, *nb = &block->bnorth.block;
-                unsigned offset_wb = block_offsets[wb->target - blocks];
-                unsigned offset_nb = block_offsets[nb->target - blocks];
-                unsigned pos = offset + (block->n1 - 1) * block->n2;
-                res = interior_point_equation(system_matrix, pos, offset_wb + find_boundary_interior_node(wb->target, wb->target_id, block->n1 - 1), offset + (block->n1 - 1) * block->n2 + 1, offset_nb + find_boundary_interior_node(nb->target, nb->target_id, 0), offset + (block->n1 - 2) * block->n2, xrhs, yrhs, 1);
-                if (res != JMTX_RESULT_SUCCESS)
-                {
-                    ret = MESH_MATRIX_FAILURE;
-                    goto cleanup_matrix;
-                }
-            }
-
-        }
-        //   Noth Side
-        if (block->bnorth.type == BOUNDARY_TYPE_BLOCK)
-        {
-            const boundary_block* nb= &block->bnorth.block;
-            unsigned offset_nb = block_offsets[nb->target - blocks];
-            for (unsigned j = 1; j < block->n2 - 1; ++j)
-            {
-                res = interior_point_equation(system_matrix, offset + (block->n1 - 1) * block->n2 + j, offset + (block->n1 - 1) * block->n2 + j - 1, offset + (block->n1 - 1) * block->n2 + j + 1, offset_nb + find_boundary_interior_node(nb->target, nb->target_id, j), offset + (block->n1 - 1) * block->n2 + j - block->n2, xrhs, yrhs, 1);
-                if (res != JMTX_RESULT_SUCCESS)
-                {
-                    ret = MESH_MATRIX_FAILURE;
-                    goto cleanup_matrix;
-                }
-            }
-        }
-        else
-        {
-            for (unsigned j  = 1; j < block->n2 - 1; ++j)
-            {
-                res = boundary_point_condition(system_matrix, offset + (block->n1 - 1) * block->n2 + j, block->bnorth.curve.x[block->n2 - 1 - j], block->bnorth.curve.y[block->n2 - 1 - j], xrhs, yrhs);
-                if (res != JMTX_RESULT_SUCCESS)
-                {
-                    ret = MESH_MATRIX_FAILURE;
-                    goto cleanup_matrix;
-                }
-            }
-        }
-        //       North East corner
-        if (block->bnorth.type == BOUNDARY_TYPE_CURVE)
-        {
-            // valx = block->bnorth.x[0]; valy = block->bnorth.y[0]
-            res = boundary_point_condition(system_matrix, offset + block->n1 * block->n2 - 1, block->bnorth.curve.x[0], block->bnorth.curve.y[0], xrhs, yrhs);
-            if (res != JMTX_RESULT_SUCCESS)
-            {
-                ret = MESH_MATRIX_FAILURE;
-                goto cleanup_matrix;
-            }
-        }
-        else if (block->beast.type == BOUNDARY_TYPE_CURVE)
-        {
-            // valx = block->beast.x[-1]; valy = block->beast.y[-1]
-            unsigned nb = block->beast.n;
-            res = boundary_point_condition(system_matrix, offset + block->n1 * block->n2 - 1, block->beast.curve.x[nb - 1], block->beast.curve.y[nb - 1], xrhs, yrhs);
-            if (res != JMTX_RESULT_SUCCESS)
-            {
-                ret = MESH_MATRIX_FAILURE;
-                goto cleanup_matrix;
-            }
-        }
-        else
-        {
-            const boundary_block* eb = &block->beast.block, *nb = &block->bnorth.block;
-            unsigned offset_eb = block_offsets[eb->target - blocks];
-            unsigned offset_nb = block_offsets[nb->target - blocks];
-            unsigned pos = offset + block->n1 * block->n2 - 1;
-            res = interior_point_equation(system_matrix, pos, pos - 1, offset_eb + find_boundary_interior_node(eb->target, eb->target_id, 0), offset_nb + find_boundary_interior_node(nb->target, nb->target_id, block->n2 - 1), pos - block->n2, xrhs, yrhs, 1);
-            if (res != JMTX_RESULT_SUCCESS)
-            {
-                ret = MESH_MATRIX_FAILURE;
-                goto cleanup_matrix;
-            }
-        }
-    }
-
-    res = solve_the_system_of_equations(point_cnt, system_matrix, xrhs, yrhs, xnodal, ynodal);
-    if (res != JMTX_RESULT_SUCCESS)
-    {
-        ret = MESH_SOLVER_FAILED;
-    }
-
-cleanup_matrix:
-    jmtxd_matrix_crs_destroy(system_matrix);
-    if (ret != MESH_SUCCESS)
-    {
-        free(ynodal);
-        free(xnodal);
-        free(yrhs);
-        free(xrhs);
-        free(block_offsets);
-        return ret;
-    }
-
+static error_id generate_mesh2d_from_geometry(unsigned n_blocks, mesh2d_block* blocks, mesh2d* p_out, const mesh_geo_args args)
+{
     //  Remove duplicate points by averaging over them
-    block_info* info = calloc(n_blocks, sizeof*info);
-    assert(info);
-    for (unsigned i = 0; i < n_blocks; ++i)
-    {
-        info[i].n1 = blocks[i].n1;
-        info[i].n2 = blocks[i].n2;
-        info[i].points = calloc(blocks[i].n1 * blocks[i].n2, sizeof(*info[i].points));
-        assert(info[i].points);
-        memset(info[i].points, ~0u, blocks[i].n1 * blocks[i].n2 * sizeof(*info[i].points));
-        info[i].lines = calloc(blocks[i].n1 * (blocks[i].n2 - 1) + (blocks[i].n1 - 1) * blocks[i].n2, sizeof(*info[i].lines));
-        assert(info[i].lines);
-        info[i].surfaces = calloc((blocks[i].n1 - 1) * (blocks[i].n2 - 1), sizeof(*info[i].surfaces));
-        assert(info[i].surfaces);
-        info[i].neighboring_block_idx.north = -1;
-        info[i].neighboring_block_idx.south = -1;
-        info[i].neighboring_block_idx.east = -1;
-        info[i].neighboring_block_idx.west = -1;
-    }
+    block_info* info = args.info;
     unsigned unique_pts = 0;
-    unsigned* division_factor = calloc(point_cnt, sizeof*division_factor);
+    unsigned* division_factor = calloc(args.point_cnt, sizeof*division_factor);
     assert(division_factor);
-    double* newx = calloc(point_cnt, sizeof*newx);
-    double* newy = calloc(point_cnt, sizeof*newy);
+    double* newx = calloc(args.point_cnt, sizeof*newx);
+    double* newy = calloc(args.point_cnt, sizeof*newy);
     assert(newx);
     assert(newy);
 
     for (unsigned i = 0; i < n_blocks; ++i)
     {
         block_info* bi = info + i;
-        const mesh_block* b = blocks + i;
+        const mesh2d_block* b = blocks + i;
         unsigned iother;
         int hasn = 0, hass = 0, hase = 0, hasw = 0;
         bi->first_pt = unique_pts;
@@ -735,10 +380,10 @@ cleanup_matrix:
         {
             for (unsigned j = 0; j < b->bnorth.n; ++j)
             {
-                unsigned other_idx = info[iother].points[point_boundary_index_flipped(b->bnorth.block.target, (b->bnorth.block.target_id), j)];
-                unsigned this_idx = point_boundary_index(b, BOUNDARY_ID_NORTH, j);
-                newx[other_idx] += xnodal[this_idx + block_offsets[i]];
-                newy[other_idx] += ynodal[this_idx + block_offsets[i]];
+                unsigned other_idx = info[iother].points[point_boundary_index_flipped(info + iother, (b->bnorth.block.target_id), j)];
+                unsigned this_idx = point_boundary_index(bi, BOUNDARY_ID_NORTH, j);
+                newx[other_idx] += args.xnodal[this_idx + args.block_offsets[i]];
+                newy[other_idx] += args.ynodal[this_idx + args.block_offsets[i]];
                 bi->points[this_idx] = other_idx;
                 division_factor[other_idx] += 1;
             }
@@ -750,10 +395,10 @@ cleanup_matrix:
         {
             for (unsigned j = 0; j < b->bsouth.n; ++j)
             {
-                unsigned other_idx = info[iother].points[point_boundary_index_flipped(b->bsouth.block.target, (b->bsouth.block.target_id), j)];
-                unsigned this_idx = point_boundary_index(b, BOUNDARY_ID_SOUTH, j);
-                newx[other_idx] += xnodal[this_idx + block_offsets[i]];
-                newy[other_idx] += ynodal[this_idx + block_offsets[i]];
+                unsigned other_idx = info[iother].points[point_boundary_index_flipped(info + iother, (b->bsouth.block.target_id), j)];
+                unsigned this_idx = point_boundary_index(bi, BOUNDARY_ID_SOUTH, j);
+                newx[other_idx] += args.xnodal[this_idx + args.block_offsets[i]];
+                newy[other_idx] += args.ynodal[this_idx + args.block_offsets[i]];
                 bi->points[this_idx] = other_idx;
                 division_factor[other_idx] += 1;
             }
@@ -765,43 +410,43 @@ cleanup_matrix:
         {
             for (unsigned j = 0; j < b->beast.n; ++j)
             {
-                unsigned other_idx = info[iother].points[point_boundary_index_flipped(b->beast.block.target, (b->beast.block.target_id), j)];
-                unsigned this_idx = point_boundary_index(b, BOUNDARY_ID_EAST, j);
-                newx[other_idx] += xnodal[this_idx + block_offsets[i]];
-                newy[other_idx] += ynodal[this_idx + block_offsets[i]];
+                unsigned other_idx = info[iother].points[point_boundary_index_flipped(info + iother, (b->beast.block.target_id), j)];
+                unsigned this_idx = point_boundary_index(bi, BOUNDARY_ID_EAST, j);
+                newx[other_idx] += args.xnodal[this_idx + args.block_offsets[i]];
+                newy[other_idx] += args.ynodal[this_idx + args.block_offsets[i]];
                 bi->points[this_idx] = other_idx;
                 division_factor[other_idx] += 1;
             }
             hase = 1;
-            // duplicate += (b->beast.n - (bi->points[b->n2 - 1] != ~0u) - (bi->points[b->n2 * b->n1 - 1] != ~0u));
+            // duplicate += (b->beast.n - (bi->points[bi->n2 - 1] != ~0u) - (bi->points[bi->n2 * bi->n1 - 1] != ~0u));
             bi->neighboring_block_idx.east = iother;
         }
         if (b->bwest.type == BOUNDARY_TYPE_BLOCK && (iother = (b->bwest.block.target - blocks)) < i)
         {
             for (unsigned j = 0; j < b->bwest.n; ++j)
             {
-                unsigned other_idx = info[iother].points[point_boundary_index_flipped(b->bwest.block.target, (b->bwest.block.target_id), j)];
-                unsigned this_idx = point_boundary_index(b, BOUNDARY_ID_WEST, j);
-                newx[other_idx] += xnodal[this_idx + block_offsets[i]];
-                newy[other_idx] += ynodal[this_idx + block_offsets[i]];
+                unsigned other_idx = info[iother].points[point_boundary_index_flipped(info + iother, (b->bwest.block.target_id), j)];
+                unsigned this_idx = point_boundary_index(bi, BOUNDARY_ID_WEST, j);
+                newx[other_idx] += args.xnodal[this_idx + args.block_offsets[i]];
+                newy[other_idx] += args.ynodal[this_idx + args.block_offsets[i]];
                 bi->points[this_idx] = other_idx;
                 division_factor[other_idx] += 1;
             }
             hasw = 1;
-            // duplicate += (b->beast.n - (bi->points[0] != ~0u) - (bi->points[b->n2 * (b->n1 - 1)] != ~0u));
+            // duplicate += (b->beast.n - (bi->points[0] != ~0u) - (bi->points[bi->n2 * (bi->n1 - 1)] != ~0u));
             bi->neighboring_block_idx.west = iother;
         }
-        // unsigned new_pts = b->n1 * b->n2 - duplicate;
+        // unsigned new_pts = bi->n1 * bi->n2 - duplicate;
         // unsigned offset = unique_pts;
-        for (unsigned row = hass; row < b->n1 - hasn; ++row)
+        for (unsigned row = hass; row < bi->n1 - hasn; ++row)
         {
-            for (unsigned col = hasw; col < b->n2-hase; ++col)
+            for (unsigned col = hasw; col < bi->n2-hase; ++col)
             {
-                geo_id idx = col + row * b->n2;
+                geo_id idx = col + row * bi->n2;
                 assert(bi->points[idx] == ~0);
                 bi->points[idx] = unique_pts;
-                newx[unique_pts] = xnodal[block_offsets[i] + idx];
-                newy[unique_pts] = ynodal[block_offsets[i] + idx];
+                newx[unique_pts] = args.xnodal[args.block_offsets[i] + idx];
+                newy[unique_pts] = args.ynodal[args.block_offsets[i] + idx];
                 assert(division_factor[unique_pts] == 0);
                 division_factor[unique_pts] = 1;
                 unique_pts += 1;
@@ -831,11 +476,8 @@ cleanup_matrix:
     }
     free(division_factor);
 
-    free(xnodal);
-    xnodal = newx;
-    free(ynodal);
-    ynodal = newy;
-    curve* line_array = calloc(max_lines, sizeof(*line_array));
+
+    line* line_array = calloc(args.max_lines, sizeof(*line_array));
     assert(line_array);
 
     // Create mesh line info
@@ -843,7 +485,7 @@ cleanup_matrix:
     for (unsigned i = 0; i < n_blocks; ++i)
     {
         block_info* bi = info + i;
-        const mesh_block* b = blocks + i;
+        const mesh2d_block* b = blocks + i;
         unsigned hasn = 0, hass = 0, hase = 0, hasw = 0;
         unsigned iother;
         bi->first_ln = line_count;
@@ -868,32 +510,32 @@ cleanup_matrix:
             hasw = 1;
         }
 
-        for (unsigned row = hass; row < b->n1 - hasn; ++row)
+        for (unsigned row = hass; row < bi->n1 - hasn; ++row)
         {
-            for (unsigned col = 0; col < b->n2 - 1; ++col)
+            for (unsigned col = 0; col < bi->n2 - 1; ++col)
             {
-                unsigned idx = row * b->n2 + col;
+                unsigned idx = row * bi->n2 + col;
                 unsigned n1 = bi->points[idx];
                 unsigned n2 = bi->points[idx + 1];
-                bi->lines[row * (b->n2 - 1) + col] = line_count;
-                line_array[line_count - 1] = (curve){.pt1 = n1, .pt2 = n2};
+                bi->lines[row * (bi->n2 - 1) + col] = line_count;
+                line_array[line_count - 1] = (line){.pt1 = n1, .pt2 = n2};
                 line_count += 1;
             }
         }
 
-        for (unsigned col = hasw; col < b->n2 - hase; ++col)
+        for (unsigned col = hasw; col < bi->n2 - hase; ++col)
         {
-            for (unsigned row = 0; row < b->n1 - 1; ++row)
+            for (unsigned row = 0; row < bi->n1 - 1; ++row)
             {
-                unsigned idx = row * b->n2 + col;
+                unsigned idx = row * bi->n2 + col;
                 unsigned n1 = bi->points[idx];
-                unsigned n2 = bi->points[idx + b->n2];
-                bi->lines[(b->n2 - 1) * b->n1 + col * (b->n1 - 1) + row] = line_count;
-                line_array[line_count - 1] = (curve){.pt1 = n1, .pt2 = n2};
+                unsigned n2 = bi->points[idx + bi->n2];
+                bi->lines[(bi->n2 - 1) * bi->n1 + col * (bi->n1 - 1) + row] = line_count;
+                line_array[line_count - 1] = (line){.pt1 = n1, .pt2 = n2};
                 line_count += 1;
             }
         }
-        for (unsigned j = 0; j < (b->n2 - 1) * b->n1 + b->n2 * (b->n1 - 1); ++j)
+        for (unsigned j = 0; j < (bi->n2 - 1) * bi->n1 + bi->n2 * (bi->n1 - 1); ++j)
         {
             assert(bi->lines[i] != 0);
         }
@@ -902,55 +544,441 @@ cleanup_matrix:
     line_count -= 1;
 
     unsigned surf_count = 0;
-    surface* surfaces = calloc(max_surfaces, sizeof*surfaces);
+    surface* surfaces = calloc(args.max_surfaces, sizeof*surfaces);
     assert(surfaces);
     for (unsigned i = 0; i < n_blocks; ++i)
     {
-        const mesh_block* b = blocks + i;
         block_info* bi = info + i;
-        for (unsigned row = 0; row < b->n1 - 1; ++row)
+        for (unsigned row = 0; row < bi->n1 - 1; ++row)
         {
-            for (unsigned col = 0; col < b->n2 - 1; ++col)
+            for (unsigned col = 0; col < bi->n2 - 1; ++col)
             {
-                geo_id btm = (geo_id)(bi->lines[col + row * (b->n2 - 1)]);
-                geo_id top = (geo_id)(bi->lines[col + (row + 1) * (b->n2 - 1)]);
-                geo_id lft = (geo_id)(bi->lines[b->n1 * (b->n2 - 1) + row + col * (b->n1 - 1)]);
-                geo_id rgt = (geo_id)(bi->lines[b->n1 * (b->n2 - 1) + row + (col + 1) * (b->n1 - 1)]);
-                assert(surf_count < max_surfaces);
-                bi->surfaces[col + row*(b->n2 - 1)] = (geo_id)surf_count;
-                surfaces[surf_count] = (surface){.cs = +btm, .ce = +rgt, .cn = -top, .cw = -lft};
+                geo_id btm = (geo_id)(bi->lines[col + row * (bi->n2 - 1)]);
+                geo_id top = (geo_id)(bi->lines[col + (row + 1) * (bi->n2 - 1)]);
+                geo_id lft = (geo_id)(bi->lines[bi->n1 * (bi->n2 - 1) + row + col * (bi->n1 - 1)]);
+                geo_id rgt = (geo_id)(bi->lines[bi->n1 * (bi->n2 - 1) + row + (col + 1) * (bi->n1 - 1)]);
+                assert(surf_count < args.max_surfaces);
+                bi->surfaces[col + row*(bi->n2 - 1)] = (geo_id)surf_count;
+                surfaces[surf_count] = (surface){.lines = +btm, .linee = +rgt, .linen = -top, .linew = -lft};
                 surf_count += 1;
             }
         }
     }
-    assert(surf_count == max_surfaces);
+    assert(surf_count == args.max_surfaces);
+    p_out->n_blocks = n_blocks;
+    p_out->p_x = newx;
+    p_out->p_y = newy;
+    p_out->block_info = info;
+    p_out->n_points = unique_pts;
+    p_out->n_lines = line_count;
+    p_out->p_lines = line_array;
+    p_out->n_surfaces = args.max_surfaces;
+    p_out->p_surfaces = surfaces;
+    surfaces = NULL;
+    line_array = NULL;
+    info = NULL;
 
+    return MESH_SUCCESS;
+}
 
-
-
-    if (ret == MESH_SUCCESS)
+error_id mesh2d_create_elliptical(unsigned int n_blocks, mesh2d_block* blocks, mesh2d* p_out)
+{
+    error_id ret = MESH_SUCCESS;
+    unsigned point_cnt = 0;
+    unsigned max_lines = 0;
+    unsigned max_surfaces = 0;
+    unsigned* block_offsets = calloc(n_blocks, sizeof*block_offsets);
+    assert(block_offsets);
+    memset(block_offsets, 0, n_blocks * sizeof(*block_offsets));
+    block_info* info = calloc(n_blocks, sizeof*info);
+    assert(info);
+    for (unsigned i = 0; i < n_blocks; ++i)
     {
-        p_out->n_blocks = n_blocks;
-        p_out->p_x = xnodal;
-        p_out->p_y = ynodal;
-        p_out->block_info = info;
-        p_out->n_points = unique_pts;
-        p_out->n_curves = line_count;
-        p_out->p_curves = line_array;
-        p_out->n_surfaces = max_surfaces;
-        p_out->p_surfaces = surfaces;
-        surfaces = NULL;
-        line_array = NULL;
-        info = NULL;
-        xnodal = NULL;
-        ynodal = NULL;
     }
-    if (info)
+    for (unsigned iblk = 0; iblk < n_blocks; ++iblk)
     {
-        for (unsigned i = 0; i < n_blocks; ++i)
+        mesh2d_block* const blk = blocks + iblk;
+        //  Check mesh boundaries and compute each block's size
+        unsigned nnorth = blk->bnorth.n;
+        unsigned nsouth = blk->bsouth.n;
+        if (nnorth != nsouth)
         {
-            free_block_info(info + i);
+            return MESH_BOUNDARY_SIZE_MISMATCH;
         }
+        unsigned neast = blk->beast.n;
+        unsigned nwest = blk->bwest.n;
+        if (neast != nwest)
+        {
+            return MESH_BOUNDARY_SIZE_MISMATCH;
+        }
+
+        unsigned npts = nnorth * neast;
+        unsigned n1 = neast;
+        unsigned n2 = nnorth;
+        info[iblk].n1 = n1;
+        info[iblk].n2 = n2;
+        info[iblk].points = calloc(n1 * n2, sizeof(*info[iblk].points));
+        assert(info[iblk].points);
+        memset(info[iblk].points, ~0u, n1 * n2 * sizeof(*info[iblk].points));
+        info[iblk].lines = calloc(n1 * (n2 - 1) + (n1 - 1) * n2, sizeof(*info[iblk].lines));
+        assert(info[iblk].lines);
+        info[iblk].surfaces = calloc((n1 - 1) * (n2 - 1), sizeof(*info[iblk].surfaces));
+        assert(info[iblk].surfaces);
+        info[iblk].neighboring_block_idx.north = -1;
+        info[iblk].neighboring_block_idx.south = -1;
+        info[iblk].neighboring_block_idx.east = -1;
+        info[iblk].neighboring_block_idx.west = -1;
+        if (iblk != n_blocks - 1)
+        {
+            block_offsets[iblk + 1] = npts + block_offsets[iblk];
+        }
+        point_cnt += npts;
+        max_lines += (n1 - 1) * n2 + n1 * (n2 - 1);
+        max_surfaces += (n1 - 1) * (n2 - 1);
+    }
+
+    double* xrhs = calloc(point_cnt, sizeof*xrhs);
+    assert(xrhs);
+    double* yrhs = calloc(point_cnt, sizeof*yrhs);
+    assert(yrhs);
+    double* xnodal = calloc(point_cnt, sizeof*xnodal);
+    assert(xnodal);
+    double* ynodal = calloc(point_cnt, sizeof*ynodal);
+    assert(ynodal);
+
+    jmtxd_matrix_crs* system_matrix;
+    jmtx_result res = jmtxds_matrix_crs_new(&system_matrix, point_cnt, point_cnt, 4*point_cnt, NULL);
+    if (res != JMTX_RESULT_SUCCESS)
+    {
+        free(ynodal);
+        free(xnodal);
+        free(yrhs);
+        free(xrhs);
+        free(block_offsets);
+        return MESH_ALLOCATION_FAILED;
+    }
+
+    for (unsigned iblock = 0; iblock < n_blocks; ++iblock)
+    {
+        const mesh2d_block* block = blocks + iblock;
+        const unsigned offset = block_offsets[iblock];
+        const unsigned n1 = info[iblock].n1;
+        const unsigned n2 = info[iblock].n2;
+
+        //  South side of the mesh
+        {
+            //  South West side
+            if (block->bsouth.type == BOUNDARY_TYPE_CURVE)
+            {
+                res = boundary_point_condition(system_matrix, offset + 0, block->bsouth.curve.x[0], block->bsouth.curve.y[0],
+                                        xrhs, yrhs);
+                if (res != JMTX_RESULT_SUCCESS)
+                {
+                    ret = MESH_MATRIX_FAILURE;
+                    goto cleanup_matrix;
+                }
+            }
+            else if (block->bwest.type == BOUNDARY_TYPE_CURVE)
+            {
+                unsigned nb = block->bwest.curve.n;
+                res = boundary_point_condition(system_matrix, offset + 0, block->bwest.curve.x[nb-1], block->bwest.curve.y[nb-1],
+                                              xrhs, yrhs);
+                if (res != JMTX_RESULT_SUCCESS)
+                {
+                    ret = MESH_MATRIX_FAILURE;
+                    goto cleanup_matrix;
+                }
+            }
+            else
+            {
+                const boundary_block* sb = &block->bsouth.block, *wb = &block->bwest.block;
+                unsigned iw = wb->target - blocks;
+                unsigned offset_wb = block_offsets[iw];
+                unsigned is = sb->target - blocks;
+                unsigned offset_sb = block_offsets[is];
+                res = interior_point_equation(system_matrix, offset + 0, offset_wb +
+                find_boundary_interior_node(info + iw, wb->target_id, 0), offset + 1, offset + n2,
+                offset_sb + find_boundary_interior_node(info + is, sb->target_id, n2 - 1), xrhs, yrhs, 1);
+                if (res != JMTX_RESULT_SUCCESS)
+                {
+                    ret = MESH_MATRIX_FAILURE;
+                    goto cleanup_matrix;
+                }
+            }
+
+            //  South side
+            if (block->bsouth.type == BOUNDARY_TYPE_BLOCK)
+            {
+                const boundary_block* sb = &block->bsouth.block;
+                unsigned is = sb->target - blocks;
+                unsigned offset_sb = block_offsets[is];
+                for (unsigned j = 1; j < n2 - 1; ++j)
+                {
+                    res = interior_point_equation(system_matrix, offset + j, offset + j - 1, offset + j + 1, offset + j + n2, offset_sb + find_boundary_interior_node(info + is, sb->target_id, n2 - 1 - j), xrhs, yrhs, 1);
+                    if (res != JMTX_RESULT_SUCCESS)
+                    {
+                        ret = MESH_MATRIX_FAILURE;
+                        goto cleanup_matrix;
+                    }
+                }
+            }
+            else
+            {
+                assert(block->bsouth.type == BOUNDARY_TYPE_CURVE);
+                for (unsigned j = 1; j < n2 - 1; ++j)
+                {
+                    res = boundary_point_condition(system_matrix, offset + j, block->bsouth.curve.x[j], block->bsouth.curve.y[j], xrhs, yrhs);
+                    if (res != JMTX_RESULT_SUCCESS)
+                    {
+                        ret = MESH_MATRIX_FAILURE;
+                        goto cleanup_matrix;
+                    }
+                }
+            }
+            //  South East corner
+            if (block->bsouth.type == BOUNDARY_TYPE_CURVE)
+            {
+                unsigned ns = block->bsouth.n;
+                res = boundary_point_condition(system_matrix, offset + n2 - 1, block->bsouth.curve.x[ns - 1], block->bsouth.curve.y[ns - 1], xrhs, yrhs);
+                if (res != JMTX_RESULT_SUCCESS)
+                {
+                    ret = MESH_MATRIX_FAILURE;
+                    goto cleanup_matrix;
+                }
+            }
+            else if (block->beast.type == BOUNDARY_TYPE_CURVE)
+            {
+                res = boundary_point_condition(system_matrix, offset + n2 - 1, block->beast.curve.x[0], block->beast.curve.y[0], xrhs, yrhs);
+                if (res != JMTX_RESULT_SUCCESS)
+                {
+                    ret = MESH_MATRIX_FAILURE;
+                    goto cleanup_matrix;
+                }
+            }
+            else
+            {
+                const boundary_block* eb = &block->beast.block, * sb = &block->bsouth.block;
+                unsigned ie = eb->target - blocks;
+                unsigned offset_eb = block_offsets[ie];
+                unsigned is = sb->target - blocks;
+                unsigned offset_sb = block_offsets[is];
+                res = interior_point_equation(system_matrix, offset + n2-1, offset + n2-2, offset_eb + find_boundary_interior_node(info + ie, eb->target_id, n1 - 1), offset + 2*n2-1, offset_sb + find_boundary_interior_node(info + is, sb->target_id, 0), xrhs, yrhs, 1);
+                if (res != JMTX_RESULT_SUCCESS)
+                {
+                    ret = MESH_MATRIX_FAILURE;
+                    goto cleanup_matrix;
+                }
+            }
+        }
+        //  Interior of the block
+        {
+            for (unsigned i = 1; i < n1-1; ++i)
+            {
+                //   West edge
+                {
+                    unsigned pos = n2 * i  + offset;
+                    if (block->bwest.type == BOUNDARY_TYPE_CURVE)
+                    {
+                        res = boundary_point_condition(system_matrix, pos, block->bwest.curve.x[n1-i-1], block->bwest.curve.y[n1-i-1], xrhs, yrhs);
+                        if (res != JMTX_RESULT_SUCCESS)
+                        {
+                            ret = MESH_MATRIX_FAILURE;
+                            goto cleanup_matrix;
+                        }
+                    }
+                    else
+                    {
+                        const boundary_block* wb = &block->bwest.block;
+                        unsigned iw = wb->target - blocks;
+                        unsigned offset_wb = block_offsets[iw];
+                        res = interior_point_equation(system_matrix, pos, offset_wb + find_boundary_interior_node(info + iw, wb->target_id, i), pos + 1, pos + n2, pos - n2, xrhs, yrhs, 1);
+                        if (res != JMTX_RESULT_SUCCESS)
+                        {
+                            ret = MESH_MATRIX_FAILURE;
+                            goto cleanup_matrix;
+                        }
+                    }
+                }
+                //  Interior
+                for (unsigned j = 1; j < n2-1; ++j)
+                {
+                    unsigned pos = j + n2 * i  + offset;
+                    res = interior_point_equation(system_matrix, pos, pos-1, pos+1, pos+n2, pos-n2, xrhs, yrhs, 0);
+                    if (res != JMTX_RESULT_SUCCESS)
+                    {
+                        ret = MESH_MATRIX_FAILURE;
+                        goto cleanup_matrix;
+                    }
+                }
+                //   East edge
+                {
+                    unsigned pos = n2 * i + n2 - 1 + offset;
+                    if (block->beast.type == BOUNDARY_TYPE_CURVE)
+                    {
+                        res = boundary_point_condition(system_matrix, pos, block->beast.curve.x[i], block->beast.curve.y[i], xrhs, yrhs);
+                        if (res != JMTX_RESULT_SUCCESS)
+                        {
+                            ret = MESH_MATRIX_FAILURE;
+                            goto cleanup_matrix;
+                        }
+                    }
+                    else
+                    {
+                        const boundary_block* eb = &block->beast.block;
+                        unsigned ie = eb->target - blocks;
+                        unsigned offset_eb = block_offsets[ie];
+                        res = interior_point_equation(system_matrix, pos, pos - 1, offset_eb + find_boundary_interior_node(info + ie, eb->target_id, n1 - 1 - i), pos + n2, pos - n2, xrhs, yrhs, 1);
+                        if (res != JMTX_RESULT_SUCCESS)
+                        {
+                            ret = MESH_MATRIX_FAILURE;
+                            goto cleanup_matrix;
+                        }
+                    }
+                }
+            }
+        }
+
+
+        //   North side
+        //       North West corner
+        {
+            if (block->bnorth.type == BOUNDARY_TYPE_CURVE)
+            {
+                // valx = block.boundary_n.x[-1]; valy = block.boundary_n.y[-1]
+                unsigned nb = block->bnorth.n;
+                res = boundary_point_condition(system_matrix, offset + (n1 - 1) * n2, block->bnorth.curve.x[nb - 1], block->bnorth.curve.y[nb - 1], xrhs, yrhs);
+                if (res != JMTX_RESULT_SUCCESS)
+                {
+                    ret = MESH_MATRIX_FAILURE;
+                    goto cleanup_matrix;
+                }
+            }
+            else if (block->bwest.type == BOUNDARY_TYPE_CURVE)
+            {
+                // valx = block.boundary_w.x[0]; valy = block.boundary_w.y[0]
+                res = boundary_point_condition(system_matrix, offset + (n1 - 1) * n2, block->bwest.curve.x[0], block->bwest.curve.y[0], xrhs, yrhs);
+                if (res != JMTX_RESULT_SUCCESS)
+                {
+                    ret = MESH_MATRIX_FAILURE;
+                    goto cleanup_matrix;
+                }
+            }
+            else
+            {
+                const boundary_block* wb = &block->bwest.block, *nb = &block->bnorth.block;
+                unsigned iw = wb->target - blocks;
+                unsigned offset_wb = block_offsets[iw];
+                unsigned in = nb->target - blocks;
+                unsigned offset_nb = block_offsets[in];
+                unsigned pos = offset + (n1 - 1) * n2;
+                res = interior_point_equation(system_matrix, pos, offset_wb + find_boundary_interior_node(info + iw, wb->target_id, n1 - 1), offset + (n1 - 1) * n2 + 1, offset_nb + find_boundary_interior_node(info + in, nb->target_id, 0), offset + (n1 - 2) * n2, xrhs, yrhs, 1);
+                if (res != JMTX_RESULT_SUCCESS)
+                {
+                    ret = MESH_MATRIX_FAILURE;
+                    goto cleanup_matrix;
+                }
+            }
+
+        }
+        //   Noth Side
+        if (block->bnorth.type == BOUNDARY_TYPE_BLOCK)
+        {
+            const boundary_block* nb= &block->bnorth.block;
+            unsigned in = nb->target - blocks;
+            unsigned offset_nb = block_offsets[in];
+            for (unsigned j = 1; j < n2 - 1; ++j)
+            {
+                res = interior_point_equation(system_matrix, offset + (n1 - 1) * n2 + j, offset + (n1 - 1) * n2 + j - 1, offset + (n1 - 1) * n2 + j + 1, offset_nb + find_boundary_interior_node(info + in, nb->target_id, j), offset + (n1 - 1) * n2 + j - n2, xrhs, yrhs, 1);
+                if (res != JMTX_RESULT_SUCCESS)
+                {
+                    ret = MESH_MATRIX_FAILURE;
+                    goto cleanup_matrix;
+                }
+            }
+        }
+        else
+        {
+            for (unsigned j  = 1; j < n2 - 1; ++j)
+            {
+                res = boundary_point_condition(system_matrix, offset + (n1 - 1) * n2 + j, block->bnorth.curve.x[n2 - 1 - j], block->bnorth.curve.y[n2 - 1 - j], xrhs, yrhs);
+                if (res != JMTX_RESULT_SUCCESS)
+                {
+                    ret = MESH_MATRIX_FAILURE;
+                    goto cleanup_matrix;
+                }
+            }
+        }
+        //       North East corner
+        if (block->bnorth.type == BOUNDARY_TYPE_CURVE)
+        {
+            // valx = block->bnorth.x[0]; valy = block->bnorth.y[0]
+            res = boundary_point_condition(system_matrix, offset + n1 * n2 - 1, block->bnorth.curve.x[0], block->bnorth.curve.y[0], xrhs, yrhs);
+            if (res != JMTX_RESULT_SUCCESS)
+            {
+                ret = MESH_MATRIX_FAILURE;
+                goto cleanup_matrix;
+            }
+        }
+        else if (block->beast.type == BOUNDARY_TYPE_CURVE)
+        {
+            // valx = block->beast.x[-1]; valy = block->beast.y[-1]
+            unsigned nb = block->beast.n;
+            res = boundary_point_condition(system_matrix, offset + n1 * n2 - 1, block->beast.curve.x[nb - 1], block->beast.curve.y[nb - 1], xrhs, yrhs);
+            if (res != JMTX_RESULT_SUCCESS)
+            {
+                ret = MESH_MATRIX_FAILURE;
+                goto cleanup_matrix;
+            }
+        }
+        else
+        {
+            const boundary_block* eb = &block->beast.block, *nb = &block->bnorth.block;
+            unsigned ie = eb->target - blocks;
+            unsigned offset_eb = block_offsets[ie];
+            unsigned in = nb->target - blocks;
+            unsigned offset_nb = block_offsets[in];
+            unsigned pos = offset + n1 * n2 - 1;
+            res = interior_point_equation(system_matrix, pos, pos - 1, offset_eb + find_boundary_interior_node(info + ie, eb->target_id, 0), offset_nb + find_boundary_interior_node(info + in, nb->target_id, n2 - 1), pos - n2, xrhs, yrhs, 1);
+            if (res != JMTX_RESULT_SUCCESS)
+            {
+                ret = MESH_MATRIX_FAILURE;
+                goto cleanup_matrix;
+            }
+        }
+    }
+
+    res = solve_the_system_of_equations(point_cnt, system_matrix, xrhs, yrhs, xnodal, ynodal);
+    if (res != JMTX_RESULT_SUCCESS)
+    {
+        ret = MESH_SOLVER_FAILED;
+    }
+
+cleanup_matrix:
+    jmtxd_matrix_crs_destroy(system_matrix);
+    if (ret != MESH_SUCCESS)
+    {
+        free(ynodal);
+        free(xnodal);
+        free(yrhs);
+        free(xrhs);
+        free(block_offsets);
+        return ret;
+    }
+
+
+    ret = generate_mesh2d_from_geometry(n_blocks, blocks, p_out,
+        (mesh_geo_args){
+            .point_cnt = point_cnt,
+            .max_lines = max_lines,
+            .max_surfaces = max_surfaces,
+            .block_offsets = block_offsets,
+            .xnodal = xnodal,
+            .ynodal = ynodal,
+            .info = info,
+        });
+    if (ret != MESH_SUCCESS)
+    {
+        free_block_info(info);
         free(info);
     }
     free(ynodal);
@@ -963,11 +991,12 @@ cleanup_matrix:
     return ret;
 }
 
-void mesh_destroy(mesh* mesh)
+
+void mesh_destroy(mesh2d* mesh)
 {
     free(mesh->p_x);
     free(mesh->p_y);
-    free(mesh->p_curves);
+    free(mesh->p_lines);
     free(mesh->p_surfaces);
     for (unsigned i = 0; i < mesh->n_blocks; ++i)
     {

@@ -1,7 +1,7 @@
 #include <assert.h>
 #include <stdio.h>
 #include "io.h"
-#include "mesh.h"
+#include "mesh2d.h"
 
 int main(void)
 {
@@ -41,7 +41,7 @@ int main(void)
         two2[i] = 2;
     }
 
-    mesh_block mb1 = 
+    mesh2d_block mb1 = 
     {
         .label = "first",
         .bsouth = {.type = BOUNDARY_TYPE_CURVE,
@@ -54,14 +54,14 @@ int main(void)
             .curve = {.n = NB1, .x = zero1, .y=bwd1}},
     };
 
-    mesh m = {0};
-    error_id err = mesh_create(1, &mb1, &m);
+    mesh2d m = {0};
+    error_id err = mesh2d_create_elliptical(1, &mb1, &m);
     assert(err == MESH_SUCCESS);
     save_nodes_to_file("out.dat", m.n_points, m.p_x, m.p_y);
     mesh_destroy(&m);
 
-    mesh_block blocks[2];
-    blocks[0] = (mesh_block)
+    mesh2d_block blocks[2];
+    blocks[0] = (mesh2d_block)
     {
         .label = "first",
         .bsouth = {.type = BOUNDARY_TYPE_CURVE,
@@ -75,7 +75,7 @@ int main(void)
         .bwest = {.type = BOUNDARY_TYPE_CURVE,
             .curve = {.n = NB1, .x = zero1, .y=bwd1}},
     };
-    blocks[1] = (mesh_block)
+    blocks[1] = (mesh2d_block)
     {
         .label = "third",
         // .bsouth = {.type = BOUNDARY_TYPE_CURVE,
@@ -89,7 +89,7 @@ int main(void)
         .bwest = {.type = BOUNDARY_TYPE_CURVE,
             .curve = {.n = NB1, .x = zero1, .y=bwd21}},
     };
-    err = mesh_create(2, blocks, &m);
+    err = mesh2d_create_elliptical(2, blocks, &m);
     assert(err == MESH_SUCCESS);
     save_nodes_to_file("out1.dat", m.n_points, m.p_x, m.p_y);
     mesh_destroy(&m);

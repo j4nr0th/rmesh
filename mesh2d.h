@@ -10,8 +10,8 @@
 
 typedef int geo_id;
 
-typedef struct curve_struct curve;
-struct curve_struct
+typedef struct line_struct line;
+struct line_struct
 {
     geo_id pt1;
     geo_id pt2;
@@ -20,10 +20,10 @@ struct curve_struct
 typedef struct surface_struct surface;
 struct surface_struct
 {
-    geo_id cs;
-    geo_id ce;
-    geo_id cn;
-    geo_id cw;
+    geo_id lines;
+    geo_id linee;
+    geo_id linen;
+    geo_id linew;
 };
 
 typedef struct block_info_struct block_info;
@@ -51,24 +51,24 @@ struct block_info_struct
     unsigned first_ln, last_ln;
 };
 
-typedef struct mesh_struct mesh;
+typedef struct mesh_struct mesh2d;
 struct mesh_struct
 {
     unsigned n_blocks;
     unsigned n_points;
-    unsigned n_curves;
+    unsigned n_lines;
     unsigned n_surfaces;
     block_info* block_info;
     double* p_x;
     double* p_y;
-    curve* p_curves;
+    line* p_lines;
     surface* p_surfaces;
 };
 
 
-error_id mesh_create(unsigned n_blocks, mesh_block* blocks, mesh* p_out);
+error_id mesh2d_create_elliptical(unsigned n_blocks, mesh2d_block* blocks, mesh2d* p_out);
 
-void mesh_destroy(mesh* mesh);
+void mesh_destroy(mesh2d* mesh);
 
 
 

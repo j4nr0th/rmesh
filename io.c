@@ -21,7 +21,7 @@ int save_nodes_to_file(const char* fname, unsigned n, const double* x, const dou
     return 0;
 }
 
-int save_lines_to_file(const char* fname, unsigned n, const curve* lines)
+int save_lines_to_file(const char* fname, unsigned n, const line* lines)
 {
     FILE* fout = fopen(fname, "w");
     if (!fout)

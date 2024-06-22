@@ -6,7 +6,7 @@
 #define MESH_GEOMETRY_H
 
 typedef struct boundary_struct boundary;
-typedef struct mesh_block_struct mesh_block;
+typedef struct mesh_block_struct mesh2d_block;
 
 enum boundary_type_enum
 {
@@ -37,9 +37,9 @@ typedef struct boundary_curve_struct boundary_curve;
 struct boundary_block_struct
 {
     unsigned n;
-    mesh_block* b1;
+    mesh2d_block* b1;
     boundary_id id1;
-    mesh_block* target;
+    mesh2d_block* target;
     boundary_id target_id;
 };
 
@@ -59,9 +59,6 @@ struct boundary_struct
 struct mesh_block_struct
 {
     const char* label;
-    unsigned npts;
-    unsigned n1;
-    unsigned n2;
     boundary bnorth;
     boundary beast;
     boundary bwest;

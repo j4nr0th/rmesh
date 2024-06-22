@@ -4,7 +4,7 @@
 #include <stdlib.h>
 
 #include "io.h"
-#include "mesh.h"
+#include "mesh2d.h"
 
 static void linespace(double x0, double x1, unsigned n, double* pout)
 {
@@ -56,9 +56,9 @@ int main(void)
         yb[i] = 2 * sin(angle_bottom[i]);
     }
 
-    mesh_block blocks[5] = {0};
+    mesh2d_block blocks[5] = {0};
 
-    blocks[0] = (mesh_block)
+    blocks[0] = (mesh2d_block)
     {
         .label =  "center",
         .bnorth = {.type=BOUNDARY_TYPE_BLOCK, .block = {.n = NB2, .b1 = blocks + 0, .id1 = BOUNDARY_ID_NORTH,
@@ -70,7 +70,7 @@ int main(void)
         .bsouth = {.type=BOUNDARY_TYPE_BLOCK, .block = {.n = NB2, .b1 = blocks + 0, .id1 = BOUNDARY_ID_SOUTH,
                                                                   .target = blocks + 4, .target_id = BOUNDARY_ID_NORTH}}
     };
-    blocks[1] = (mesh_block)
+    blocks[1] = (mesh2d_block)
     {
         .label =  "left",
         .bnorth = {.type=BOUNDARY_TYPE_BLOCK, .block = {.n = NR, .target = blocks + 3, .target_id = BOUNDARY_ID_WEST,
@@ -81,7 +81,7 @@ int main(void)
         .bsouth = {.type=BOUNDARY_TYPE_BLOCK, .block = {.n = NR, .target = blocks + 4, .target_id = BOUNDARY_ID_WEST,
                                                                   .b1 = blocks + 1, .id1 = BOUNDARY_ID_SOUTH}},
     };
-    blocks[2] = (mesh_block)
+    blocks[2] = (mesh2d_block)
     {
         .label =  "right",
         .bnorth = {.type=BOUNDARY_TYPE_BLOCK, .block = {.n = NR, .target = blocks + 3, .target_id = BOUNDARY_ID_EAST,
@@ -92,7 +92,7 @@ int main(void)
         .bsouth = {.type=BOUNDARY_TYPE_BLOCK, .block = {.n = NR, .target = blocks + 4, .target_id = BOUNDARY_ID_EAST,
                                                                   .b1 = blocks + 2, .id1 = BOUNDARY_ID_SOUTH}}
     };
-    blocks[3] = (mesh_block)
+    blocks[3] = (mesh2d_block)
     {
         .label =  "top",
         .bnorth = {.type = BOUNDARY_TYPE_CURVE, .curve = {.n = NB2, .x=xt, .y=yt}},
@@ -103,7 +103,7 @@ int main(void)
         .bsouth = {.type=BOUNDARY_TYPE_BLOCK, .block = {.n = NB2, .target = blocks + 0, .target_id = BOUNDARY_ID_NORTH,
                                                                   .b1 = blocks + 3, .id1 = BOUNDARY_ID_SOUTH}}
     };
-    blocks[4] = (mesh_block)
+    blocks[4] = (mesh2d_block)
     {
         .label =  "bottom",
         .bnorth = {.type=BOUNDARY_TYPE_BLOCK, .block = {.n = NB2, .target = blocks + 0, .target_id = BOUNDARY_ID_SOUTH,
@@ -115,15 +115,15 @@ int main(void)
         .bsouth = {.type = BOUNDARY_TYPE_CURVE, .curve = {.n = NB2, .x=xb, .y=yb}}
     };
 
-    mesh m = {0};
-    error_id e = mesh_create(5, blocks, &m);
+    mesh2d m = {0};
+    error_id e = mesh2d_create_elliptical(5, blocks, &m);
     assert(e == MESH_SUCCESS);
     if (e != MESH_SUCCESS)
     {
         exit(EXIT_FAILURE);
     }
     save_nodes_to_file("bigger_pts.dat", m.n_points, m.p_x, m.p_y);
-    save_lines_to_file("bigger_lns.dat", m.n_curves, m.p_curves);
+    save_lines_to_file("bigger_lns.dat", m.n_lines, m.p_lines);
     mesh_destroy(&m);
     return 0;
 }

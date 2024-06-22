@@ -4,8 +4,8 @@ project(mesh C)
 set(CMAKE_C_STANDARD 99)
 
 list(APPEND MESH_FILES geometry.h
-        mesh.c
-        mesh.h
+        mesh2d.c
+        mesh2d.h
         err.c
         err.h
         io.c
