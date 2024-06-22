@@ -61,57 +61,57 @@ int main(void)
     blocks[0] = (mesh2d_block)
     {
         .label =  "center",
-        .bnorth = {.type=BOUNDARY_TYPE_BLOCK, .block = {.n = NB2, .b1 = blocks + 0, .id1 = BOUNDARY_ID_NORTH,
-                                                                  .target = blocks + 3, .target_id = BOUNDARY_ID_SOUTH}},
-        .beast = {.type=BOUNDARY_TYPE_BLOCK, .block = {.n = NB1, .b1 = blocks + 0, .id1 = BOUNDARY_ID_EAST,
-                                                                  .target = blocks + 2, .target_id = BOUNDARY_ID_WEST}},
-        .bwest = {.type=BOUNDARY_TYPE_BLOCK, .block = {.n = NB1, .b1 = blocks + 0, .id1 = BOUNDARY_ID_WEST,
-                                                                  .target = blocks + 1, .target_id = BOUNDARY_ID_EAST}},
-        .bsouth = {.type=BOUNDARY_TYPE_BLOCK, .block = {.n = NB2, .b1 = blocks + 0, .id1 = BOUNDARY_ID_SOUTH,
-                                                                  .target = blocks + 4, .target_id = BOUNDARY_ID_NORTH}}
+        .bnorth = {.type=BOUNDARY_TYPE_BLOCK, .block = {.n = NB2, .owner = 0, .owner_id = BOUNDARY_ID_NORTH,
+                                                                  .target = 3, .target_id = BOUNDARY_ID_SOUTH}},
+        .beast = {.type=BOUNDARY_TYPE_BLOCK, .block = {.n = NB1, .owner = 0, .owner_id = BOUNDARY_ID_EAST,
+                                                                  .target = 2, .target_id = BOUNDARY_ID_WEST}},
+        .bwest = {.type=BOUNDARY_TYPE_BLOCK, .block = {.n = NB1, .owner = 0, .owner_id = BOUNDARY_ID_WEST,
+                                                                  .target = 1, .target_id = BOUNDARY_ID_EAST}},
+        .bsouth = {.type=BOUNDARY_TYPE_BLOCK, .block = {.n = NB2, .owner = 0, .owner_id = BOUNDARY_ID_SOUTH,
+                                                                  .target = 4, .target_id = BOUNDARY_ID_NORTH}}
     };
     blocks[1] = (mesh2d_block)
     {
         .label =  "left",
-        .bnorth = {.type=BOUNDARY_TYPE_BLOCK, .block = {.n = NR, .target = blocks + 3, .target_id = BOUNDARY_ID_WEST,
-                                                                  .b1 = blocks + 1, .id1 = BOUNDARY_ID_NORTH}},
-        .beast = {.type=BOUNDARY_TYPE_BLOCK, .block = {.n = NB1, .target = blocks + 0, .target_id = BOUNDARY_ID_WEST,
-                                                                  .b1 = blocks + 1, .id1 = BOUNDARY_ID_EAST}},
+        .bnorth = {.type=BOUNDARY_TYPE_BLOCK, .block = {.n = NR, .target = 3, .target_id = BOUNDARY_ID_WEST,
+                                                                  .owner = 1, .owner_id = BOUNDARY_ID_NORTH}},
+        .beast = {.type=BOUNDARY_TYPE_BLOCK, .block = {.n = NB1, .target = 0, .target_id = BOUNDARY_ID_WEST,
+                                                                  .owner = 1, .owner_id = BOUNDARY_ID_EAST}},
         .bwest = {.type = BOUNDARY_TYPE_CURVE, .curve = {.n = NB1, .x=xl, .y=yl}},
-        .bsouth = {.type=BOUNDARY_TYPE_BLOCK, .block = {.n = NR, .target = blocks + 4, .target_id = BOUNDARY_ID_WEST,
-                                                                  .b1 = blocks + 1, .id1 = BOUNDARY_ID_SOUTH}},
+        .bsouth = {.type=BOUNDARY_TYPE_BLOCK, .block = {.n = NR, .target = 4, .target_id = BOUNDARY_ID_WEST,
+                                                                  .owner = 1, .owner_id = BOUNDARY_ID_SOUTH}},
     };
     blocks[2] = (mesh2d_block)
     {
         .label =  "right",
-        .bnorth = {.type=BOUNDARY_TYPE_BLOCK, .block = {.n = NR, .target = blocks + 3, .target_id = BOUNDARY_ID_EAST,
-                                                                  .b1 = blocks + 2, .id1 = BOUNDARY_ID_NORTH}},
+        .bnorth = {.type=BOUNDARY_TYPE_BLOCK, .block = {.n = NR, .target = 3, .target_id = BOUNDARY_ID_EAST,
+                                                                  .owner = 2, .owner_id = BOUNDARY_ID_NORTH}},
         .beast = {.type=BOUNDARY_TYPE_CURVE, .curve = {.n = NB1, .x=xr, .y=yr}},
-        .bwest = {.type=BOUNDARY_TYPE_BLOCK, .block = {.n = NB1, .target = blocks + 0, .target_id = BOUNDARY_ID_EAST,
-                                                                  .b1 = blocks + 2, .id1 = BOUNDARY_ID_WEST}},
-        .bsouth = {.type=BOUNDARY_TYPE_BLOCK, .block = {.n = NR, .target = blocks + 4, .target_id = BOUNDARY_ID_EAST,
-                                                                  .b1 = blocks + 2, .id1 = BOUNDARY_ID_SOUTH}}
+        .bwest = {.type=BOUNDARY_TYPE_BLOCK, .block = {.n = NB1, .target = 0, .target_id = BOUNDARY_ID_EAST,
+                                                                  .owner = 2, .owner_id = BOUNDARY_ID_WEST}},
+        .bsouth = {.type=BOUNDARY_TYPE_BLOCK, .block = {.n = NR, .target = 4, .target_id = BOUNDARY_ID_EAST,
+                                                                  .owner = 2, .owner_id = BOUNDARY_ID_SOUTH}}
     };
     blocks[3] = (mesh2d_block)
     {
         .label =  "top",
         .bnorth = {.type = BOUNDARY_TYPE_CURVE, .curve = {.n = NB2, .x=xt, .y=yt}},
-        .beast = {.type=BOUNDARY_TYPE_BLOCK, .block = {.n = NR, .target = blocks + 2, .target_id = BOUNDARY_ID_NORTH,
-                                                                  .b1 = blocks + 3, .id1 = BOUNDARY_ID_EAST}},
-        .bwest = {.type=BOUNDARY_TYPE_BLOCK, .block = {.n = NR, .target = blocks + 1, .target_id = BOUNDARY_ID_NORTH,
-                                                                  .b1 = blocks + 3, .id1 = BOUNDARY_ID_WEST}},
-        .bsouth = {.type=BOUNDARY_TYPE_BLOCK, .block = {.n = NB2, .target = blocks + 0, .target_id = BOUNDARY_ID_NORTH,
-                                                                  .b1 = blocks + 3, .id1 = BOUNDARY_ID_SOUTH}}
+        .beast = {.type=BOUNDARY_TYPE_BLOCK, .block = {.n = NR, .target = 2, .target_id = BOUNDARY_ID_NORTH,
+                                                                  .owner = 3, .owner_id = BOUNDARY_ID_EAST}},
+        .bwest = {.type=BOUNDARY_TYPE_BLOCK, .block = {.n = NR, .target = 1, .target_id = BOUNDARY_ID_NORTH,
+                                                                  .owner = 3, .owner_id = BOUNDARY_ID_WEST}},
+        .bsouth = {.type=BOUNDARY_TYPE_BLOCK, .block = {.n = NB2, .target = 0, .target_id = BOUNDARY_ID_NORTH,
+                                                                  .owner = 3, .owner_id = BOUNDARY_ID_SOUTH}}
     };
     blocks[4] = (mesh2d_block)
     {
         .label =  "bottom",
-        .bnorth = {.type=BOUNDARY_TYPE_BLOCK, .block = {.n = NB2, .target = blocks + 0, .target_id = BOUNDARY_ID_SOUTH,
-                                                                  .b1 = blocks + 4, .id1 = BOUNDARY_ID_NORTH}},
-        .beast = {.type=BOUNDARY_TYPE_BLOCK, .block = {.n = NR, .target = blocks + 2, .target_id = BOUNDARY_ID_SOUTH,
-                                                                  .b1 = blocks + 4, .id1 = BOUNDARY_ID_EAST}},
-        .bwest = {.type=BOUNDARY_TYPE_BLOCK, .block = {.n = NR, .target = blocks + 1, .target_id = BOUNDARY_ID_SOUTH,
-                                                                  .b1 = blocks + 4, .id1 = BOUNDARY_ID_WEST}},
+        .bnorth = {.type=BOUNDARY_TYPE_BLOCK, .block = {.n = NB2, .target = 0, .target_id = BOUNDARY_ID_SOUTH,
+                                                                  .owner = 4, .owner_id = BOUNDARY_ID_NORTH}},
+        .beast = {.type=BOUNDARY_TYPE_BLOCK, .block = {.n = NR, .target = 2, .target_id = BOUNDARY_ID_SOUTH,
+                                                                  .owner = 4, .owner_id = BOUNDARY_ID_EAST}},
+        .bwest = {.type=BOUNDARY_TYPE_BLOCK, .block = {.n = NR, .target = 1, .target_id = BOUNDARY_ID_SOUTH,
+                                                                  .owner = 4, .owner_id = BOUNDARY_ID_WEST}},
         .bsouth = {.type = BOUNDARY_TYPE_CURVE, .curve = {.n = NB2, .x=xb, .y=yb}}
     };
 

@@ -8,8 +8,6 @@
 #include "err.h"
 
 
-typedef int geo_id;
-
 typedef struct line_struct line;
 struct line_struct
 {
@@ -55,18 +53,19 @@ typedef struct mesh_struct mesh2d;
 struct mesh_struct
 {
     unsigned n_blocks;
-    unsigned n_points;
-    unsigned n_lines;
-    unsigned n_surfaces;
     block_info* block_info;
+    unsigned n_points;
     double* p_x;
     double* p_y;
+    unsigned n_lines;
     line* p_lines;
+    unsigned n_surfaces;
     surface* p_surfaces;
 };
 
+error_id mesh2d_check_blocks(unsigned n_blocks, const mesh2d_block* blocks);
 
-error_id mesh2d_create_elliptical(unsigned n_blocks, mesh2d_block* blocks, mesh2d* p_out);
+error_id mesh2d_create_elliptical(unsigned n_blocks, const mesh2d_block* blocks, mesh2d* p_out);
 
 void mesh_destroy(mesh2d* mesh);
 

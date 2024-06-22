@@ -8,6 +8,8 @@
 typedef struct boundary_struct boundary;
 typedef struct mesh_block_struct mesh2d_block;
 
+typedef int geo_id;
+
 enum boundary_type_enum
 {
     BOUNDARY_TYPE_NONE = 0,
@@ -37,9 +39,9 @@ typedef struct boundary_curve_struct boundary_curve;
 struct boundary_block_struct
 {
     unsigned n;
-    mesh2d_block* b1;
-    boundary_id id1;
-    mesh2d_block* target;
+    geo_id owner;
+    boundary_id owner_id;
+    geo_id target;
     boundary_id target_id;
 };
 

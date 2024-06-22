@@ -322,13 +322,13 @@ static inline void deal_with_line_boundary(const boundary_block* boundary, const
         [BOUNDARY_ID_WEST] = -1,
         };
     //  When this is 1 we reverse, when it's -1 we do not
-    const int reversed = bnd_map[boundary->id1] * bnd_map[boundary->target_id];
+    const int reversed = bnd_map[boundary->owner_id] * bnd_map[boundary->target_id];
     if (reversed > 0)
     {
         for (unsigned i = 0; i < boundary->n - 1; ++i)
         {
             const geo_id iother = -info_target->lines[line_boundary_index_reverse(info_target, boundary->target_id, i)];
-            const unsigned this_idx = line_boundary_index(info_owner, boundary->id1, i);
+            const unsigned this_idx = line_boundary_index(info_owner, boundary->owner_id, i);
             info_owner->lines[this_idx] = iother;
         }
     }
@@ -337,7 +337,7 @@ static inline void deal_with_line_boundary(const boundary_block* boundary, const
         for (unsigned i = 0; i < boundary->n - 1; ++i)
         {
             const geo_id iother = info_target->lines[line_boundary_index(info_target, boundary->target_id, i)];
-            const unsigned this_idx = line_boundary_index(info_owner, boundary->id1, i);
+            const unsigned this_idx = line_boundary_index(info_owner, boundary->owner_id, i);
             info_owner->lines[this_idx] = iother;
         }
     }
@@ -357,7 +357,7 @@ struct mesh2d_geo_args_struct
 };
 
 
-static error_id generate_mesh2d_from_geometry(unsigned n_blocks, mesh2d_block* blocks, mesh2d* p_out, const mesh_geo_args args)
+static error_id generate_mesh2d_from_geometry(unsigned n_blocks, const mesh2d_block* blocks, mesh2d* p_out, const mesh_geo_args args)
 {
     //  Remove duplicate points by averaging over them
     block_info* info = args.info;
@@ -376,7 +376,7 @@ static error_id generate_mesh2d_from_geometry(unsigned n_blocks, mesh2d_block* b
         unsigned iother;
         int hasn = 0, hass = 0, hase = 0, hasw = 0;
         bi->first_pt = unique_pts;
-        if (b->bnorth.type == BOUNDARY_TYPE_BLOCK && (iother = (b->bnorth.block.target - blocks)) < i)
+        if (b->bnorth.type == BOUNDARY_TYPE_BLOCK && (iother = (b->bnorth.block.target)) < i)
         {
             for (unsigned j = 0; j < b->bnorth.n; ++j)
             {
@@ -391,7 +391,7 @@ static error_id generate_mesh2d_from_geometry(unsigned n_blocks, mesh2d_block* b
             bi->neighboring_block_idx.north = iother;
             // duplicate += b->bnorth.n;
         }
-        if (b->bsouth.type == BOUNDARY_TYPE_BLOCK && (iother = (b->bsouth.block.target - blocks)) < i)
+        if (b->bsouth.type == BOUNDARY_TYPE_BLOCK && (iother = (b->bsouth.block.target)) < i)
         {
             for (unsigned j = 0; j < b->bsouth.n; ++j)
             {
@@ -406,7 +406,7 @@ static error_id generate_mesh2d_from_geometry(unsigned n_blocks, mesh2d_block* b
             bi->neighboring_block_idx.south = iother;
             // duplicate += b->bsouth.n;
         }
-        if (b->beast.type == BOUNDARY_TYPE_BLOCK && (iother = (b->beast.block.target - blocks)) < i)
+        if (b->beast.type == BOUNDARY_TYPE_BLOCK && (iother = (b->beast.block.target)) < i)
         {
             for (unsigned j = 0; j < b->beast.n; ++j)
             {
@@ -421,7 +421,7 @@ static error_id generate_mesh2d_from_geometry(unsigned n_blocks, mesh2d_block* b
             // duplicate += (b->beast.n - (bi->points[bi->n2 - 1] != ~0u) - (bi->points[bi->n2 * bi->n1 - 1] != ~0u));
             bi->neighboring_block_idx.east = iother;
         }
-        if (b->bwest.type == BOUNDARY_TYPE_BLOCK && (iother = (b->bwest.block.target - blocks)) < i)
+        if (b->bwest.type == BOUNDARY_TYPE_BLOCK && (iother = (b->bwest.block.target)) < i)
         {
             for (unsigned j = 0; j < b->bwest.n; ++j)
             {
@@ -489,22 +489,22 @@ static error_id generate_mesh2d_from_geometry(unsigned n_blocks, mesh2d_block* b
         unsigned hasn = 0, hass = 0, hase = 0, hasw = 0;
         unsigned iother;
         bi->first_ln = line_count;
-        if (b->bnorth.type == BOUNDARY_TYPE_BLOCK && (iother = (b->bnorth.block.target - blocks)) < i)
+        if (b->bnorth.type == BOUNDARY_TYPE_BLOCK && (iother = (b->bnorth.block.target)) < i)
         {
             deal_with_line_boundary(&b->bnorth.block, info + i, info + iother);
             hasn = 1;
         }
-        if (b->bsouth.type == BOUNDARY_TYPE_BLOCK && (iother = (b->bsouth.block.target - blocks)) < i)
+        if (b->bsouth.type == BOUNDARY_TYPE_BLOCK && (iother = (b->bsouth.block.target)) < i)
         {
             deal_with_line_boundary(&b->bsouth.block, info + i, info + iother);
             hass = 1;
         }
-        if (b->beast.type == BOUNDARY_TYPE_BLOCK && (iother = (b->beast.block.target - blocks)) < i)
+        if (b->beast.type == BOUNDARY_TYPE_BLOCK && (iother = (b->beast.block.target)) < i)
         {
             deal_with_line_boundary(&b->beast.block, info + i, info + iother);
             hase = 1;
         }
-        if (b->bwest.type == BOUNDARY_TYPE_BLOCK && (iother = (b->bwest.block.target - blocks)) < i)
+        if (b->bwest.type == BOUNDARY_TYPE_BLOCK && (iother = (b->bwest.block.target)) < i)
         {
             deal_with_line_boundary(&b->bwest.block, info + i, info + iother);
             hasw = 1;
@@ -581,7 +581,66 @@ static error_id generate_mesh2d_from_geometry(unsigned n_blocks, mesh2d_block* b
     return MESH_SUCCESS;
 }
 
-error_id mesh2d_create_elliptical(unsigned int n_blocks, mesh2d_block* blocks, mesh2d* p_out)
+static inline error_id check_boundary_consistency(const mesh2d_block* blocks, const boundary_block* bnd, const unsigned idx)
+{
+    const boundary* other = NULL;
+    switch (bnd->target_id)
+    {
+    case BOUNDARY_ID_NORTH:
+        other = &blocks[bnd->target].bnorth;
+        break;
+    case BOUNDARY_ID_SOUTH:
+        other = &blocks[bnd->target].bsouth;
+        break;
+    case BOUNDARY_ID_EAST:
+        other = &blocks[bnd->target].beast;
+        break;
+    case BOUNDARY_ID_WEST:
+        other = &blocks[bnd->target].bwest;
+        break;
+    }
+    if (other == NULL)
+    {
+        return MESH_INVALID_BOUNDARY_ID;
+    }
+    if (other->n != bnd->n)
+    {
+        return MESH_BOUNDARY_POINT_COUNT_MISMATCH;
+    }
+    if (other->type == BOUNDARY_TYPE_CURVE && bnd->target >= idx)
+    {
+        return MESH_BOUNDARY_UNSORTED;
+    }
+    return MESH_SUCCESS;
+}
+
+error_id mesh2d_check_blocks(unsigned n_blocks, const mesh2d_block* blocks)
+{
+    error_id ret = MESH_SUCCESS;
+    for (unsigned iblk = 0; iblk < n_blocks; ++iblk)
+    {
+        const mesh2d_block* b = blocks + iblk;
+        if (b->bnorth.type == BOUNDARY_TYPE_BLOCK && (ret = check_boundary_consistency(blocks, &b->bnorth.block, iblk)) != MESH_SUCCESS)
+        {
+            break;
+        }
+        if (b->bsouth.type == BOUNDARY_TYPE_BLOCK && (ret = check_boundary_consistency(blocks, &b->bsouth.block, iblk)) != MESH_SUCCESS)
+        {
+            break;
+        }
+        if (b->beast.type == BOUNDARY_TYPE_BLOCK && (ret = check_boundary_consistency(blocks, &b->beast.block, iblk)) != MESH_SUCCESS)
+        {
+            break;
+        }
+        if (b->bwest.type == BOUNDARY_TYPE_BLOCK && (ret = check_boundary_consistency(blocks, &b->bwest.block, iblk)) != MESH_SUCCESS)
+        {
+            break;
+        }
+    }
+    return ret;
+}
+
+error_id mesh2d_create_elliptical(unsigned int n_blocks, const mesh2d_block* blocks, mesh2d* p_out)
 {
     error_id ret = MESH_SUCCESS;
     unsigned point_cnt = 0;
@@ -597,7 +656,7 @@ error_id mesh2d_create_elliptical(unsigned int n_blocks, mesh2d_block* blocks, m
     }
     for (unsigned iblk = 0; iblk < n_blocks; ++iblk)
     {
-        mesh2d_block* const blk = blocks + iblk;
+        const mesh2d_block* const blk = blocks + iblk;
         //  Check mesh boundaries and compute each block's size
         unsigned nnorth = blk->bnorth.n;
         unsigned nsouth = blk->bsouth.n;
@@ -692,9 +751,9 @@ error_id mesh2d_create_elliptical(unsigned int n_blocks, mesh2d_block* blocks, m
             else
             {
                 const boundary_block* sb = &block->bsouth.block, *wb = &block->bwest.block;
-                unsigned iw = wb->target - blocks;
+                unsigned iw = wb->target;
                 unsigned offset_wb = block_offsets[iw];
-                unsigned is = sb->target - blocks;
+                unsigned is = sb->target;
                 unsigned offset_sb = block_offsets[is];
                 res = interior_point_equation(system_matrix, offset + 0, offset_wb +
                 find_boundary_interior_node(info + iw, wb->target_id, 0), offset + 1, offset + n2,
@@ -710,7 +769,7 @@ error_id mesh2d_create_elliptical(unsigned int n_blocks, mesh2d_block* blocks, m
             if (block->bsouth.type == BOUNDARY_TYPE_BLOCK)
             {
                 const boundary_block* sb = &block->bsouth.block;
-                unsigned is = sb->target - blocks;
+                unsigned is = sb->target;
                 unsigned offset_sb = block_offsets[is];
                 for (unsigned j = 1; j < n2 - 1; ++j)
                 {
@@ -758,9 +817,9 @@ error_id mesh2d_create_elliptical(unsigned int n_blocks, mesh2d_block* blocks, m
             else
             {
                 const boundary_block* eb = &block->beast.block, * sb = &block->bsouth.block;
-                unsigned ie = eb->target - blocks;
+                unsigned ie = eb->target;
                 unsigned offset_eb = block_offsets[ie];
-                unsigned is = sb->target - blocks;
+                unsigned is = sb->target;
                 unsigned offset_sb = block_offsets[is];
                 res = interior_point_equation(system_matrix, offset + n2-1, offset + n2-2, offset_eb + find_boundary_interior_node(info + ie, eb->target_id, n1 - 1), offset + 2*n2-1, offset_sb + find_boundary_interior_node(info + is, sb->target_id, 0), xrhs, yrhs, 1);
                 if (res != JMTX_RESULT_SUCCESS)
@@ -789,7 +848,7 @@ error_id mesh2d_create_elliptical(unsigned int n_blocks, mesh2d_block* blocks, m
                     else
                     {
                         const boundary_block* wb = &block->bwest.block;
-                        unsigned iw = wb->target - blocks;
+                        unsigned iw = wb->target;
                         unsigned offset_wb = block_offsets[iw];
                         res = interior_point_equation(system_matrix, pos, offset_wb + find_boundary_interior_node(info + iw, wb->target_id, i), pos + 1, pos + n2, pos - n2, xrhs, yrhs, 1);
                         if (res != JMTX_RESULT_SUCCESS)
@@ -825,7 +884,7 @@ error_id mesh2d_create_elliptical(unsigned int n_blocks, mesh2d_block* blocks, m
                     else
                     {
                         const boundary_block* eb = &block->beast.block;
-                        unsigned ie = eb->target - blocks;
+                        unsigned ie = eb->target;
                         unsigned offset_eb = block_offsets[ie];
                         res = interior_point_equation(system_matrix, pos, pos - 1, offset_eb + find_boundary_interior_node(info + ie, eb->target_id, n1 - 1 - i), pos + n2, pos - n2, xrhs, yrhs, 1);
                         if (res != JMTX_RESULT_SUCCESS)
@@ -866,9 +925,9 @@ error_id mesh2d_create_elliptical(unsigned int n_blocks, mesh2d_block* blocks, m
             else
             {
                 const boundary_block* wb = &block->bwest.block, *nb = &block->bnorth.block;
-                unsigned iw = wb->target - blocks;
+                unsigned iw = wb->target;
                 unsigned offset_wb = block_offsets[iw];
-                unsigned in = nb->target - blocks;
+                unsigned in = nb->target;
                 unsigned offset_nb = block_offsets[in];
                 unsigned pos = offset + (n1 - 1) * n2;
                 res = interior_point_equation(system_matrix, pos, offset_wb + find_boundary_interior_node(info + iw, wb->target_id, n1 - 1), offset + (n1 - 1) * n2 + 1, offset_nb + find_boundary_interior_node(info + in, nb->target_id, 0), offset + (n1 - 2) * n2, xrhs, yrhs, 1);
@@ -884,7 +943,7 @@ error_id mesh2d_create_elliptical(unsigned int n_blocks, mesh2d_block* blocks, m
         if (block->bnorth.type == BOUNDARY_TYPE_BLOCK)
         {
             const boundary_block* nb= &block->bnorth.block;
-            unsigned in = nb->target - blocks;
+            unsigned in = nb->target;
             unsigned offset_nb = block_offsets[in];
             for (unsigned j = 1; j < n2 - 1; ++j)
             {
@@ -933,9 +992,9 @@ error_id mesh2d_create_elliptical(unsigned int n_blocks, mesh2d_block* blocks, m
         else
         {
             const boundary_block* eb = &block->beast.block, *nb = &block->bnorth.block;
-            unsigned ie = eb->target - blocks;
+            unsigned ie = eb->target;
             unsigned offset_eb = block_offsets[ie];
-            unsigned in = nb->target - blocks;
+            unsigned in = nb->target;
             unsigned offset_nb = block_offsets[in];
             unsigned pos = offset + n1 * n2 - 1;
             res = interior_point_equation(system_matrix, pos, pos - 1, offset_eb + find_boundary_interior_node(info + ie, eb->target_id, 0), offset_nb + find_boundary_interior_node(info + in, nb->target_id, n2 - 1), pos - n2, xrhs, yrhs, 1);
