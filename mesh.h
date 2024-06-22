@@ -20,19 +20,35 @@ struct curve_struct
 typedef struct surface_struct surface;
 struct surface_struct
 {
-    curve cs;
-    curve ce;
-    curve cn;
-    curve cw;
+    geo_id cs;
+    geo_id ce;
+    geo_id cn;
+    geo_id cw;
 };
 
 typedef struct block_info_struct block_info;
 struct block_info_struct
 {
-    unsigned n1, n2;        //  Number of points on the mesh
-    geo_id* points;         //  Indices of points of the block (size is n1 * n2)
-    geo_id* lines;          //  Indices of lines of the block (size is n1 * (n2-1) + n2 * (n1 - 1))
-    geo_id* surfaces;       //  Indices of the surfaces of the block (size is (n1 - 1) * (n2 - 1))
+    //  Number of points on the mesh
+    unsigned n1, n2;
+    //  Indices of points of the block (size is n1 * n2)
+    geo_id* points;
+    //  Indices of lines of the block (size is n1 * (n2-1) + n2 * (n1 - 1))
+    geo_id* lines;
+    //  Indices of the surfaces of the block (size is (n1 - 1) * (n2 - 1))
+    geo_id* surfaces;
+    //  Indices of the first and last points in the mesh block. There might be some shared with other blocks, but those
+    //  are not included in here
+    unsigned first_pt, last_pt;
+    //  Indices of mesh blocks which border this block and where they border it. -1 means that there is no block bordering it
+    struct
+    {
+        int west, east, north, south;
+    } neighboring_block_idx;
+
+    //  Indices of the first and last lines in the mesh block. There might be some shared with other blocks, but those
+    //  are not included in here
+    unsigned first_ln, last_ln;
 };
 
 typedef struct mesh_struct mesh;

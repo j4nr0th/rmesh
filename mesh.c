@@ -349,6 +349,7 @@ error_id mesh_create(unsigned int n_blocks, mesh_block* blocks, mesh* p_out)
     error_id ret = MESH_SUCCESS;
     unsigned point_cnt = 0;
     unsigned max_lines = 0;
+    unsigned max_surfaces = 0;
     unsigned* block_offsets = calloc(n_blocks, sizeof*block_offsets);
     assert(block_offsets);
     memset(block_offsets, 0, n_blocks * sizeof(*block_offsets));
@@ -379,6 +380,7 @@ error_id mesh_create(unsigned int n_blocks, mesh_block* blocks, mesh* p_out)
         }
         point_cnt += npts;
         max_lines += (blk->n1 - 1) * blk->n2 + blk->n1 * (blk->n2 - 1);
+        max_surfaces += (blk->n1 - 1) * (blk->n2 - 1);
     }
 
     double* xrhs = calloc(point_cnt, sizeof*xrhs);
@@ -709,6 +711,10 @@ cleanup_matrix:
         assert(info[i].lines);
         info[i].surfaces = calloc((blocks[i].n1 - 1) * (blocks[i].n2 - 1), sizeof(*info[i].surfaces));
         assert(info[i].surfaces);
+        info[i].neighboring_block_idx.north = -1;
+        info[i].neighboring_block_idx.south = -1;
+        info[i].neighboring_block_idx.east = -1;
+        info[i].neighboring_block_idx.west = -1;
     }
     unsigned unique_pts = 0;
     unsigned* division_factor = calloc(point_cnt, sizeof*division_factor);
@@ -720,11 +726,11 @@ cleanup_matrix:
 
     for (unsigned i = 0; i < n_blocks; ++i)
     {
-        const block_info* bi = info + i;
+        block_info* bi = info + i;
         const mesh_block* b = blocks + i;
         unsigned iother;
         int hasn = 0, hass = 0, hase = 0, hasw = 0;
-        // unsigned duplicate = 0;
+        bi->first_pt = unique_pts;
         if (b->bnorth.type == BOUNDARY_TYPE_BLOCK && (iother = (b->bnorth.block.target - blocks)) < i)
         {
             for (unsigned j = 0; j < b->bnorth.n; ++j)
@@ -737,6 +743,7 @@ cleanup_matrix:
                 division_factor[other_idx] += 1;
             }
             hasn = 1;
+            bi->neighboring_block_idx.north = iother;
             // duplicate += b->bnorth.n;
         }
         if (b->bsouth.type == BOUNDARY_TYPE_BLOCK && (iother = (b->bsouth.block.target - blocks)) < i)
@@ -751,6 +758,7 @@ cleanup_matrix:
                 division_factor[other_idx] += 1;
             }
             hass = 1;
+            bi->neighboring_block_idx.south = iother;
             // duplicate += b->bsouth.n;
         }
         if (b->beast.type == BOUNDARY_TYPE_BLOCK && (iother = (b->beast.block.target - blocks)) < i)
@@ -766,6 +774,7 @@ cleanup_matrix:
             }
             hase = 1;
             // duplicate += (b->beast.n - (bi->points[b->n2 - 1] != ~0u) - (bi->points[b->n2 * b->n1 - 1] != ~0u));
+            bi->neighboring_block_idx.east = iother;
         }
         if (b->bwest.type == BOUNDARY_TYPE_BLOCK && (iother = (b->bwest.block.target - blocks)) < i)
         {
@@ -780,6 +789,7 @@ cleanup_matrix:
             }
             hasw = 1;
             // duplicate += (b->beast.n - (bi->points[0] != ~0u) - (bi->points[b->n2 * (b->n1 - 1)] != ~0u));
+            bi->neighboring_block_idx.west = iother;
         }
         // unsigned new_pts = b->n1 * b->n2 - duplicate;
         // unsigned offset = unique_pts;
@@ -788,18 +798,17 @@ cleanup_matrix:
             for (unsigned col = hasw; col < b->n2-hase; ++col)
             {
                 geo_id idx = col + row * b->n2;
-                if (bi->points[idx] == ~0)
-                {
-                    bi->points[idx] = unique_pts;
-                    newx[unique_pts] = xnodal[block_offsets[i] + idx];
-                    newy[unique_pts] = ynodal[block_offsets[i] + idx];
-                    assert(division_factor[unique_pts] == 0);
-                    division_factor[unique_pts] = 1;
-                    unique_pts += 1;
-                }
+                assert(bi->points[idx] == ~0);
+                bi->points[idx] = unique_pts;
+                newx[unique_pts] = xnodal[block_offsets[i] + idx];
+                newy[unique_pts] = ynodal[block_offsets[i] + idx];
+                assert(division_factor[unique_pts] == 0);
+                division_factor[unique_pts] = 1;
+                unique_pts += 1;
             }
         }
-        // unsigned new_pts = unique_pts - offset;
+
+        bi->last_pt = unique_pts;
     }
 
     for (unsigned i = 0; i < unique_pts; ++i)
@@ -833,10 +842,11 @@ cleanup_matrix:
     unsigned line_count = 1;
     for (unsigned i = 0; i < n_blocks; ++i)
     {
-        const block_info* bi = info + i;
+        block_info* bi = info + i;
         const mesh_block* b = blocks + i;
         unsigned hasn = 0, hass = 0, hase = 0, hasw = 0;
         unsigned iother;
+        bi->first_ln = line_count;
         if (b->bnorth.type == BOUNDARY_TYPE_BLOCK && (iother = (b->bnorth.block.target - blocks)) < i)
         {
             deal_with_line_boundary(&b->bnorth.block, info + i, info + iother);
@@ -887,9 +897,33 @@ cleanup_matrix:
         {
             assert(bi->lines[i] != 0);
         }
+        bi->last_ln = line_count;
     }
     line_count -= 1;
 
+    unsigned surf_count = 0;
+    surface* surfaces = calloc(max_surfaces, sizeof*surfaces);
+    assert(surfaces);
+    for (unsigned i = 0; i < n_blocks; ++i)
+    {
+        const mesh_block* b = blocks + i;
+        block_info* bi = info + i;
+        for (unsigned row = 0; row < b->n1 - 1; ++row)
+        {
+            for (unsigned col = 0; col < b->n2 - 1; ++col)
+            {
+                geo_id btm = (geo_id)(bi->lines[col + row * (b->n2 - 1)]);
+                geo_id top = (geo_id)(bi->lines[col + (row + 1) * (b->n2 - 1)]);
+                geo_id lft = (geo_id)(bi->lines[b->n1 * (b->n2 - 1) + row + col * (b->n1 - 1)]);
+                geo_id rgt = (geo_id)(bi->lines[b->n1 * (b->n2 - 1) + row + (col + 1) * (b->n1 - 1)]);
+                assert(surf_count < max_surfaces);
+                bi->surfaces[col + row*(b->n2 - 1)] = (geo_id)surf_count;
+                surfaces[surf_count] = (surface){.cs = +btm, .ce = +rgt, .cn = -top, .cw = -lft};
+                surf_count += 1;
+            }
+        }
+    }
+    assert(surf_count == max_surfaces);
 
 
 
@@ -903,6 +937,9 @@ cleanup_matrix:
         p_out->n_points = unique_pts;
         p_out->n_curves = line_count;
         p_out->p_curves = line_array;
+        p_out->n_surfaces = max_surfaces;
+        p_out->p_surfaces = surfaces;
+        surfaces = NULL;
         line_array = NULL;
         info = NULL;
         xnodal = NULL;
