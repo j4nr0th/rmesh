@@ -110,11 +110,12 @@ static PyObject* rmsh_create_mesh_function(PyObject* self, PyObject* args)
     PyListObject* input_list = NULL;
     int b_verbose = 0;
     int b_direct = 0;
-    if (!PyArg_ParseTuple(args, "O!pp", PyList_Type, &input_list, &b_verbose, &b_direct))
+    if (!PyArg_ParseTuple(args, "O!pp", &PyList_Type, &input_list, &b_verbose, &b_direct))
     {
         //  Failed parsing the input for some reason, return NULL
         return NULL;
     }
+    if (b_verbose) printf("Parsed the input args\n");
     //  Convert to usable form
     const unsigned n_blocks = PyList_GET_SIZE(input_list);
     mesh2d_block* p_blocks = PyMem_MALLOC(n_blocks * sizeof*p_blocks);
@@ -122,20 +123,23 @@ static PyObject* rmsh_create_mesh_function(PyObject* self, PyObject* args)
     {
         return PyErr_NoMemory();
     }
-
+    if (b_verbose) printf("Allocated memory for the blocks\n");
     for (unsigned i = 0; i < n_blocks; ++i)
     {
         const char* label = NULL;
         PyTupleObject* bnds[4];
-        if (!PyArg_ParseTuple(PyList_GET_ITEM(input_list, i), "sO!O!O!O!", &label, PyTuple_Type, &bnds+0, PyTuple_Type, bnds+1,
-                              PyTuple_Type, bnds+2, PyTuple_Type, bnds+3))
+        if (!PyArg_ParseTuple(PyList_GET_ITEM(input_list, i), "sO!O!O!O!", &label, &PyTuple_Type, &bnds+0, &PyTuple_Type, bnds+1,
+                              &PyTuple_Type, bnds+2, &PyTuple_Type, bnds+3))
         {
             PyMem_FREE(p_blocks);
             return NULL;
         }
+        if (b_verbose) printf("Parsed the data for block \"%s\"\n", label);
+        
         static const boundary_id ids[4] = {BOUNDARY_ID_NORTH, BOUNDARY_ID_SOUTH, BOUNDARY_ID_EAST, BOUNDARY_ID_WEST};
         for (unsigned j = 0; j < 4; ++j)
         {
+            if (b_verbose) printf("\tDealing with the boundary \"%u\"\n", j);
             const boundary_id id = ids[j];
             PyTupleObject* t = bnds[j];
             boundary bnd;
@@ -147,16 +151,18 @@ static PyObject* rmsh_create_mesh_function(PyObject* self, PyObject* args)
                 return PyErr_Format(PyExc_RuntimeError, "Boundary tuple had an invalid length (should be 5)");
             }
             int bnd_type = (int)PyLong_AsLong(PyTuple_GET_ITEM(t, 0));
+            if (b_verbose) printf("\t\tBoundary type: \"%d\"\n", bnd_type);
             if (bnd_type == 0)
             {
                 //  Boundary Curve
                 boundary_curve c;
                 PyArrayObject* x,* y;
-                if (!PyArg_ParseTuple((PyObject*)t, "iiIO!O!", &bnd_type, &bnd_id, &bnd_n, PyArray_Type, &x, PyArray_Type, &y))
+                if (!PyArg_ParseTuple((PyObject*)t, "iiIO!O!", &bnd_type, &bnd_id, &bnd_n, &PyArray_Type, &x, &PyArray_Type, &y))
                 {
                     PyMem_FREE(p_blocks);
                     return NULL;
                 }
+                if (b_verbose) printf("\t\tParsed curve boundary\n");
                 c.x = (double*)PyArray_DATA(x);
                 c.y = (double*)PyArray_DATA(y);
                 c.n = bnd_n;
@@ -194,6 +200,7 @@ static PyObject* rmsh_create_mesh_function(PyObject* self, PyObject* args)
                     PyMem_FREE(p_blocks);
                     return PyErr_Format(PyExc_RuntimeError, "Invalid block boundary type %u", target_id);
                 }
+                if (b_verbose) printf("\t\tParsed block boundary\n");
                 bnd = (boundary){.type = BOUNDARY_TYPE_BLOCK, .block=b};
             }
             else
@@ -201,6 +208,7 @@ static PyObject* rmsh_create_mesh_function(PyObject* self, PyObject* args)
                 PyMem_FREE(p_blocks);
                 return PyErr_Format(PyExc_RuntimeError, "Boundary tuple type had an invalid value (should be 0 or 1)");
             }
+            if (b_verbose) printf("\t\tWriting the boundary to the block\n");
 
             switch (id)
             {
@@ -220,6 +228,7 @@ static PyObject* rmsh_create_mesh_function(PyObject* self, PyObject* args)
         }
     }
 
+    if (b_verbose) printf("Finished converting the inputs\n");
     //  Blocks should be all set up now
 
     PyMesh2dObject* msh = PyObject_New(PyMesh2dObject, &mesh_type);
@@ -228,13 +237,15 @@ static PyObject* rmsh_create_mesh_function(PyObject* self, PyObject* args)
         PyMem_FREE(p_blocks);
         return NULL;
     }
-    error_id e = mesh2d_create_elliptical(n_blocks, p_blocks, &msh->data);
+    if (b_verbose) printf("Calling the mesh function\n");
+    const error_id e = mesh2d_create_elliptical(n_blocks, p_blocks, &msh->data);
     PyMem_FREE(p_blocks);
     if (e != MESH_SUCCESS)
     {
         Py_DECREF(msh);
         return PyErr_Format(PyExc_RuntimeError, "Failed mesh creation (error code %u)", (unsigned)e);
     }
+    if (b_verbose) printf("Returning from the function\n");
 
     return (PyObject*)msh;
 }
@@ -245,7 +256,7 @@ static PyObject* rmsh_create_mesh_function(PyObject* self, PyObject* args)
 static PyMethodDef module_methods[] =
     {
         {.ml_name = "info", .ml_meth = rmsh_info_func, .ml_flags = METH_NOARGS, .ml_doc = "Prints the info about th module"},
-        {.ml_name = "create_elliptical_mesh", .ml_meth = rmsh_create_mesh_function, .ml_flags = METH_O, .ml_doc = "Internal module function, which creates an elliptical mesh"},
+        {.ml_name = "create_elliptical_mesh", .ml_meth = rmsh_create_mesh_function, .ml_flags = METH_VARARGS, .ml_doc = "Internal module function, which creates an elliptical mesh"},
         //  Terminating entry
         {NULL, NULL, 0, NULL},
     };

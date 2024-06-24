@@ -2,7 +2,7 @@ from .geometry import BoundaryBlock, BoundaryCurve, BoundaryId
 import numpy as np
 from dataclasses import dataclass
 from typing import Sequence
-from rmsh._rmsh import create_elliptical_mesh
+from rmsh._rmsh import create_elliptical_mesh as _cem
 
 
 @dataclass(frozen=False)
@@ -12,6 +12,7 @@ class MeshBlock:
 
     def __init__(self, label: str, boundaries: dict[BoundaryId, BoundaryCurve|BoundaryBlock]):
         self.label = label
+        self.boundaries = dict()
         for k in boundaries:
             match k:
                 case (BoundaryId.BoundaryNorth | BoundaryId.BoundarySouth
@@ -189,11 +190,11 @@ def create_elliptical_mesh(blocks: Sequence[MeshBlock], *, force_direct: bool = 
             v = None
             if type(bnd) is BoundaryCurve:
                 bnd: BoundaryCurve
-                v = (0, bid, b.n_boundaries[bid], np.array(bnd.x, dtype=np.float64), np.array(bnd.y, dtype=np.float64))
+                v = (0, bid.value, b.n_boundaries[bid], np.array(bnd.x, dtype=np.float64), np.array(bnd.y, dtype=np.float64))
             elif type(bnd) is BoundaryBlock:
                 bnd: BoundaryBlock
                 iother, other = bdict[bnd.target]
-                v = (1, bid, b.n_boundaries[bid], iother, bnd.target_id)
+                v = (1, bid.value, b.n_boundaries[bid], iother, bnd.target_id)
             if v is None:
                 raise RuntimeError(f"Boundary {bid.name} of block \"{b.label}\" was of invalid type f{type(bnd)}")
             boundaries[bid] = v
@@ -201,6 +202,6 @@ def create_elliptical_mesh(blocks: Sequence[MeshBlock], *, force_direct: bool = 
               boundaries[BoundaryId.BoundaryEast], boundaries[BoundaryId.BoundaryWest])
         inputs.append(bv)
 
-    data = create_elliptical_mesh(inputs, force_direct, verbose)
+    data = _cem(inputs, force_direct, verbose)
 
     return Mesh2D(data)

@@ -102,7 +102,7 @@ static inline jmtx_result boundary_point_condition(jmtxd_matrix_crs* mat, const 
 }
 
 
-enum {DIRECT_SOLVER_LIMIT = (1 << 12), GMRESR_SOLVER_LIMIT = (1 << 18), GOD_HELP_ME = (1 << 20), GMRESR_MLIM = (1<<6),
+enum {DIRECT_SOLVER_LIMIT = (1 << 12), GMRESR_SOLVER_LIMIT = (1 << 14), GOD_HELP_ME = (1 << 20), GMRESR_MLIM = (1<<6),
     GCR_TRUNCATION_LIM = (1 << 7)};
 
 
@@ -736,6 +736,7 @@ error_id mesh2d_create_elliptical(unsigned int n_blocks, const mesh2d_block* blo
         free(yrhs);
         free(xrhs);
         free(block_offsets);
+        printf("jmtxds_matrix_crs_new(%p, %u, %u, %u, %p), %s: %s\n", &system_matrix, point_cnt, point_cnt, 4*point_cnt, NULL, (4*point_cnt > point_cnt * point_cnt ? "BAD" : "GOOD"), jmtx_result_to_str(res));
         return MESH_ALLOCATION_FAILED;
     }
 
