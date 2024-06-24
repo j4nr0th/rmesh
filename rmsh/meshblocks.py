@@ -71,7 +71,7 @@ class Mesh2D:
         return np.reshape(sidx, (-1, 4))
 
 
-def _find_boundary_size(bnd: BoundaryBlock, blcks: dict[str, tuple[int, MeshBlock]], first: BoundaryBlock) -> int:
+def _find_boundary_size(bnd: BoundaryBlock, blcks: dict[str, tuple[int, MeshBlock]], first: BoundaryBlock|None) -> int:
     _, target = blcks[bnd.target]
     other_bnd = target.boundaries[bnd.target_id]
     if (first is bnd):
@@ -82,9 +82,9 @@ def _find_boundary_size(bnd: BoundaryBlock, blcks: dict[str, tuple[int, MeshBloc
                 other_bnd = target.boundaries[BoundaryId.BoundarySouth]
             case BoundaryId.BoundarySouth:
                 other_bnd = target.boundaries[BoundaryId.BoundaryNorth]
-            case BoundaryId.BoundaryEast:
-                other_bnd = target.boundaries[BoundaryId.BoundaryEast]
             case BoundaryId.BoundaryWest:
+                other_bnd = target.boundaries[BoundaryId.BoundaryEast]
+            case BoundaryId.BoundaryEast:
                 other_bnd = target.boundaries[BoundaryId.BoundaryWest]
             case _:
                 raise RuntimeError("Invalid boundary type for the block boundary encountered")
@@ -92,7 +92,7 @@ def _find_boundary_size(bnd: BoundaryBlock, blcks: dict[str, tuple[int, MeshBloc
         return len(other_bnd.x)
     elif other_bnd.n != 0:
         return other_bnd.n
-    return _find_boundary_size(other_bnd, blcks, first)
+    return _find_boundary_size(other_bnd, blcks, first if first is not None else bnd)
 
 
 def _curves_have_common_point(c1: BoundaryCurve, c2: BoundaryCurve) -> bool:
@@ -141,7 +141,7 @@ def create_elliptical_mesh(blocks: Sequence[MeshBlock], *, force_direct: bool = 
                 elif bnd.n != 0:
                     nbnd = bnd.n
                 else:
-                    nbnd = _find_boundary_size(bnd, bdict, bnd)
+                    nbnd = _find_boundary_size(bnd, bdict, None)
             #   Check that the corners of curve match up correctly if check is enabled
             elif not allow_insane:
                 bnd: BoundaryCurve
@@ -194,7 +194,7 @@ def create_elliptical_mesh(blocks: Sequence[MeshBlock], *, force_direct: bool = 
             elif type(bnd) is BoundaryBlock:
                 bnd: BoundaryBlock
                 iother, other = bdict[bnd.target]
-                v = (1, bid.value, b.n_boundaries[bid], iother, bnd.target_id)
+                v = (1, bid.value, b.n_boundaries[bid], iother, bnd.target_id.value)
             if v is None:
                 raise RuntimeError(f"Boundary {bid.name} of block \"{b.label}\" was of invalid type f{type(bnd)}")
             boundaries[bid] = v

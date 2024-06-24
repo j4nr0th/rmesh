@@ -18,7 +18,7 @@ if __name__ == "__main__":
         s = fn(np.linspace(0, 1, n))
         return np.array(v1 * (1 - s) + v2 * s)
 
-    NBND = 512
+    NBND = 400
 
     c0 = ge.BoundaryCurve(x=interpolate(X0, X1, lambda t: t**2, NBND), y=interpolate(Y0, Y1, lambda t: t**2, NBND))
     c1 = ge.BoundaryCurve(x=interpolate(X1, X2, lambda t: t**2, NBND), y=interpolate(Y1, Y2, lambda t: t**2, NBND))
@@ -38,16 +38,17 @@ if __name__ == "__main__":
     x = m.x
     y = m.y
     ln = m.lines
-    lnvals = []
+    # lnvals = []
     xb = x[ln[:, 0]]
     yb = y[ln[:, 0]]
     xe = x[ln[:, 1]]
     ye = y[ln[:, 1]]
 
-
-    for i in range(ln.shape[0]):
-        lnvals.append([(xb[i], yb[i]), (xe[i], ye[i])])
-
+    rb = np.stack((xb, yb), axis=1)
+    re = np.stack((xe, ye), axis=1)
+    # for i in range(ln.shape[0]):
+    #     lnvals.append((rb[i, :], re[i, :]))#[(xb[i], yb[i]), (xe[i], ye[i])])
+    lnvals = np.stack((rb, re), axis=1)
 
     plt.gca().add_collection(col.LineCollection(lnvals, linestyle="dashed", color="black"))
     plt.scatter(x, y)

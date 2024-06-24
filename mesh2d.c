@@ -88,7 +88,7 @@ static inline jmtx_result interior_point_equation(jmtxd_matrix_crs* mat, const u
     }
     vx[idx] = 0;
     vy[idx] = 0;
-    return jmtxds_matrix_crs_set_row(mat, idx, 5, indices, values);
+    return jmtxd_matrix_crs_build_row(mat, idx, 5, indices, values);
 }
 
 static inline jmtx_result boundary_point_condition(jmtxd_matrix_crs* mat, const unsigned idx, const double x, const double y,
@@ -98,11 +98,11 @@ static inline jmtx_result boundary_point_condition(jmtxd_matrix_crs* mat, const 
     vy[idx] = y;
     const uint32_t index = idx;
     const double value = 1;
-    return jmtxds_matrix_crs_set_row(mat, idx, 1, &index, &value);
+    return jmtxd_matrix_crs_build_row(mat, idx, 1, &index, &value);
 }
 
 
-enum {DIRECT_SOLVER_LIMIT = (1 << 12), GMRESR_SOLVER_LIMIT = (1 << 14), GOD_HELP_ME = (1 << 20), GMRESR_MLIM = (1<<6),
+enum {DIRECT_SOLVER_LIMIT = (1 << 12), GMRESR_SOLVER_LIMIT = ((1u << 32u) - 1u), GOD_HELP_ME = (1 << 20), GMRESR_MLIM = (1<<6),
     GCR_TRUNCATION_LIM = (1 << 7)};
 
 
@@ -203,15 +203,17 @@ static inline jmtx_result solve_the_system_of_equations(const unsigned npts, con
 
     if (argsx.out_last_error > argsx.in_convergence_criterion)
     {
-        printf("Running BICG-Stab on an %u by %u problem\n", npts, npts);
-        r1 = jmtxd_solve_iterative_bicgstab_crs(mat, xrhs, out_x, aux1, aux2, aux3, aux4, aux5, aux6, &argsx);
-        printf("BICG-Stab for the x equation finished in %u iterations with an error of %g\n", argsx.out_last_iteration, argsx.out_last_error);
+        printf("Running ILU on an %u by %u problem\n", npts, npts);
+        r1 = jmtxd_solve_iterative_ilu_crs_parallel(mat, xrhs, out_x, aux1, &argsx, NULL);
+        // r1 = jmtxd_solve_iterative_bicgstab_crs(mat, xrhs, out_x, aux1, aux2, aux3, aux4, aux5, aux6, &argsx);
+        printf("ILU for the x equation finished in %u iterations with an error of %g\n", argsx.out_last_iteration, argsx.out_last_error);
     }
     if (argsy.out_last_error > argsy.in_convergence_criterion)
     {
-        printf("Running BICG-Stab on an %u by %u problem\n", npts, npts);
-        r2 = jmtxd_solve_iterative_bicgstab_crs(mat, xrhs, out_x, aux1, aux2, aux3, aux4, aux5, aux6, &argsy);
-        printf("BICG-Stab for the y equation finished in %u iterations with an error of %g\n", argsx.out_last_iteration, argsx.out_last_error);
+        printf("Running ILU on an %u by %u problem\n", npts, npts);
+        r2 = jmtxd_solve_iterative_ilu_crs_parallel(mat, yrhs, out_y, aux1, &argsy, NULL);
+        // r2 = jmtxd_solve_iterative_bicgstab_crs(mat, xrhs, out_x, aux1, aux2, aux3, aux4, aux5, aux6, &argsy);
+        printf("ILU for the x equation finished in %u iterations with an error of %g\n", argsy.out_last_iteration, argsy.out_last_error);
     }
 
 end:
