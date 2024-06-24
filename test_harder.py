@@ -10,7 +10,7 @@ from matplotlib import collections as col
 
 
 if __name__ == "__main__":
-    N1 = 800; N2 = 700; NR = 600
+    N1 = 80; N2 = 70; NR = 60
     angle1 = np.linspace(0, np.pi/2, N1)
     angle2 = np.linspace(np.pi/2, np.pi, N2)
     angle3 = np.linspace(np.pi, 3*np.pi/2, N1)
