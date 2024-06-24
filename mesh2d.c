@@ -356,6 +356,24 @@ struct mesh2d_geo_args_struct
     block_info* info;
 };
 
+static inline void set_neighboring_block(block_info* bi, boundary_id id, int block_idx)
+{
+    switch (id)
+    {
+    case BOUNDARY_ID_NORTH:
+        bi->neighboring_block_idx.north = block_idx;
+        break;
+    case BOUNDARY_ID_SOUTH:
+        bi->neighboring_block_idx.south = block_idx;
+        break;
+    case BOUNDARY_ID_EAST:
+        bi->neighboring_block_idx.east = block_idx;
+        break;
+    case BOUNDARY_ID_WEST:
+        bi->neighboring_block_idx.west = block_idx;
+        break;
+    }
+}
 
 static error_id generate_mesh2d_from_geometry(unsigned n_blocks, const mesh2d_block* blocks, mesh2d* p_out, const mesh_geo_args args)
 {
@@ -389,6 +407,7 @@ static error_id generate_mesh2d_from_geometry(unsigned n_blocks, const mesh2d_bl
             }
             hasn = 1;
             bi->neighboring_block_idx.north = iother;
+            set_neighboring_block(info + iother, b->bnorth.block.target_id, i);
             // duplicate += b->bnorth.n;
         }
         if (b->bsouth.type == BOUNDARY_TYPE_BLOCK && (iother = (b->bsouth.block.target)) < i)
@@ -404,6 +423,7 @@ static error_id generate_mesh2d_from_geometry(unsigned n_blocks, const mesh2d_bl
             }
             hass = 1;
             bi->neighboring_block_idx.south = iother;
+            set_neighboring_block(info + iother, b->bsouth.block.target_id, i);
             // duplicate += b->bsouth.n;
         }
         if (b->beast.type == BOUNDARY_TYPE_BLOCK && (iother = (b->beast.block.target)) < i)
@@ -420,6 +440,7 @@ static error_id generate_mesh2d_from_geometry(unsigned n_blocks, const mesh2d_bl
             hase = 1;
             // duplicate += (b->beast.n - (bi->points[bi->n2 - 1] != ~0u) - (bi->points[bi->n2 * bi->n1 - 1] != ~0u));
             bi->neighboring_block_idx.east = iother;
+            set_neighboring_block(info + iother, b->beast.block.target_id, i);
         }
         if (b->bwest.type == BOUNDARY_TYPE_BLOCK && (iother = (b->bwest.block.target)) < i)
         {
@@ -435,6 +456,7 @@ static error_id generate_mesh2d_from_geometry(unsigned n_blocks, const mesh2d_bl
             hasw = 1;
             // duplicate += (b->beast.n - (bi->points[0] != ~0u) - (bi->points[bi->n2 * (bi->n1 - 1)] != ~0u));
             bi->neighboring_block_idx.west = iother;
+            set_neighboring_block(info + iother, b->bwest.block.target_id, i);
         }
         // unsigned new_pts = bi->n1 * bi->n2 - duplicate;
         // unsigned offset = unique_pts;

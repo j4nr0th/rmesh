@@ -2,3 +2,5 @@
 cmake-*
 .vscode/
 build/
+venv/
+_skbuild/
