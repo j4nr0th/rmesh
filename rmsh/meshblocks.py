@@ -103,8 +103,18 @@ def _curves_have_common_point(c1: BoundaryCurve, c2: BoundaryCurve) -> bool:
     return p11 == p21 or p11 == p22 or p12 == p21 or p12 == p22
 
 
-def create_elliptical_mesh(blocks: Sequence[MeshBlock], *, force_direct: bool = False, verbose: bool = False,
-                           allow_insane: bool = False) -> Mesh2D:
+@dataclass
+class SolverConfig:
+    force_direct: bool = False
+    tolerance: float = 1e-6
+    smoother_rounds: int = 16
+    max_iterations: int = 128
+    max_rounds: int = 8
+    strict: bool = True
+
+
+def create_elliptical_mesh(blocks: Sequence[MeshBlock], *, verbose: bool = False, allow_insane: bool = False,
+                           solver_cfg: SolverConfig = SolverConfig()) -> tuple[Mesh2D, float, float]:
     #   Holds indices to which the blocks map to
     bdict = dict()
     if verbose: print("Checking all blocks")
@@ -178,7 +188,17 @@ def create_elliptical_mesh(blocks: Sequence[MeshBlock], *, force_direct: bool = 
             bnd_lens[bid] = nbnd
             b.n_boundaries = bnd_lens
 
-    # TODO: check opposite boundaries have matching number of points
+    for i, b in enumerate(blocks):
+        nnorth = b.n_boundaries[BoundaryId.BoundaryNorth]
+        nsouth = b.n_boundaries[BoundaryId.BoundarySouth]
+        neast = b.n_boundaries[BoundaryId.BoundaryEast]
+        nwest = b.n_boundaries[BoundaryId.BoundaryWest]
+        if nnorth != nsouth:
+            raise RuntimeError(f"Block {b.label} has {nnorth} points on the north boundary, but {nsouth} points on the"
+                               f" south boundary")
+        if neast != nwest:
+            raise RuntimeError(f"Block {b.label} has {neast} points on the east boundary, but {nwest} points on the"
+                               f" west boundary")
 
     #   Convert the input blocks into the form which is demanded by the C part of the code
     if verbose: print("Converting inputs to for usable by the C code")
@@ -201,7 +221,8 @@ def create_elliptical_mesh(blocks: Sequence[MeshBlock], *, force_direct: bool = 
         bv = (b.label, boundaries[BoundaryId.BoundaryNorth], boundaries[BoundaryId.BoundarySouth],
               boundaries[BoundaryId.BoundaryEast], boundaries[BoundaryId.BoundaryWest])
         inputs.append(bv)
+    extra = (solver_cfg.force_direct, solver_cfg.tolerance, solver_cfg.smoother_rounds, solver_cfg.max_iterations,
+             solver_cfg.max_rounds, solver_cfg.strict)
+    data, rx, ry = _cem(inputs, verbose, extra)
 
-    data = _cem(inputs, force_direct, verbose)
-
-    return Mesh2D(data)
+    return Mesh2D(data), rx, ry

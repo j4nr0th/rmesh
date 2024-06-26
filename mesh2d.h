@@ -4,6 +4,8 @@
 
 #ifndef MESH_MESH_H
 #define MESH_MESH_H
+#include <stddef.h>
+
 #include "geometry.h"
 #include "err.h"
 
@@ -63,11 +65,31 @@ struct mesh_struct
     surface* p_surfaces;
 };
 
+typedef struct solver_config_struct solver_config;
+struct solver_config_struct
+{
+    int direct;
+    double tol;
+    unsigned smoother_rounds;
+    unsigned max_iterations;
+    unsigned max_rounds;
+    int verbose;
+    int strict;
+};
+
+typedef struct allocator_struct allocator;
+struct allocator_struct
+{
+    void* (*alloc)(void* state, size_t sz);
+    void* (*realloc)(void* state, void* ptr, size_t newsz);
+    void (*free)(void* state, void* ptr);
+};
+
 error_id mesh2d_check_blocks(unsigned n_blocks, const mesh2d_block* blocks);
 
-error_id mesh2d_create_elliptical(unsigned n_blocks, const mesh2d_block* blocks, mesh2d* p_out);
+error_id mesh2d_create_elliptical(unsigned n_blocks, const mesh2d_block* blocks, const solver_config* cfg, allocator* allocator, mesh2d* p_out, double* rx, double* ry);
 
-void mesh_destroy(mesh2d* mesh);
+void mesh_destroy(mesh2d* mesh, allocator* allocator);
 
 
 

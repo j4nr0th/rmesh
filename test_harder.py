@@ -10,7 +10,7 @@ from matplotlib import collections as col
 
 
 if __name__ == "__main__":
-    N1 = 80; N2 = 70; NR = 60
+    N1 = 80; N2 = 70; NR = 70
     angle1 = np.linspace(0, np.pi/2, N1)
     angle2 = np.linspace(np.pi/2, np.pi, N2)
     angle3 = np.linspace(np.pi, 3*np.pi/2, N1)
@@ -61,10 +61,14 @@ if __name__ == "__main__":
                           ge.BoundaryId.BoundarySouth: ge.BoundaryBlock("btm", ge.BoundaryId.BoundaryNorth),
                       })
     t0 = time.time_ns()
-    m = mb.create_elliptical_mesh([b0, b1, b2, b3, b4], verbose=True)
+    m, rx, ry = mb.create_elliptical_mesh([b0, b1, b2, b3, b4], verbose=True, solver_cfg=mb.SolverConfig(strict=False,
+                                                                                                 tolerance=1e-5,
+                                                                                                 max_iterations=512,
+                                                                                                 smoother_rounds=0))
     t1 = time.time_ns()
 
     print("Time taken for the mesh generation:", (t1 - t0)/1e9, "seconds")
+    print("Residuals:", rx, ry)
 
     x = m.x
     y = m.y
@@ -82,9 +86,10 @@ if __name__ == "__main__":
     lnvals = np.stack((rb, re), axis=1)
 
     plt.gca().add_collection(col.LineCollection(lnvals, linestyle="dashed", color="black"))
-    plt.scatter(x, y)
+    # plt.scatter(x, y)
     #     plt.plot((x[ln[i, 0]], x[ln[i, 1]]), (y[ln[i, 0]], y[ln[i, 1]]), color="black", linestyle="dashed")
-
+    plt.xlim(-1, +1)
+    plt.ylim(-1, +1)
     plt.gca().set_aspect("equal")
     plt.show()
 

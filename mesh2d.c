@@ -4,6 +4,7 @@
 
 #include "mesh2d.h"
 #include <jmtx/double/matrices/sparse_row_compressed_safe.h>
+#include <jmtx/double/matrices/sparse_column_compressed.h>
 #include <jmtx/double/solvers/bicgstab_iteration.h>
 #include <assert.h>
 #include <math.h>
@@ -12,11 +13,12 @@
 
 #include <jmtx/double/matrices/band_row_major_safe.h>
 #include <jmtx/double/decompositions/band_lu_decomposition.h>
+#include <jmtx/double/decompositions/incomplete_lu_decomposition.h>
 #include <jmtx/double/solvers/lu_solving.h>
 
 #include <jmtx/double/matrices/sparse_conversion.h>
 
-#include "jmtx/double/solvers/recursive_generalized_minimum_residual_iteration.h"
+
 
 
 static inline unsigned find_boundary_interior_node(const block_info* blk, const boundary_id t, const unsigned idx)
@@ -102,28 +104,28 @@ static inline jmtx_result boundary_point_condition(jmtxd_matrix_crs* mat, const 
 }
 
 
-enum {DIRECT_SOLVER_LIMIT = (1 << 12), GMRESR_SOLVER_LIMIT = ((1u << 32u) - 1u), GOD_HELP_ME = (1 << 20), GMRESR_MLIM = (1<<6),
+enum {DIRECT_SOLVER_LIMIT = (1 << 12), GOD_HELP_ME = (1 << 20), GMRESR_MLIM = (1<<6),
     GCR_TRUNCATION_LIM = (1 << 7)};
 
 
 static inline jmtx_result solve_the_system_of_equations(const unsigned npts, const jmtxd_matrix_crs* mat,
     double xrhs[const restrict static npts], double yrhs[const restrict static npts],
-    double out_x[const restrict npts], double out_y[const restrict npts])
+    double out_x[const restrict npts], double out_y[const restrict npts], allocator* allocator, const jmtx_allocator_callbacks* allocator_callbacks, const solver_config* cfg, double* rx, double* ry)
 {
-    jmtxd_matrix_brm* banded = NULL, *l = NULL, *u = NULL;
     jmtx_result res = JMTX_RESULT_SUCCESS;
     jmtx_result r1 = JMTX_RESULT_SUCCESS, r2 = JMTX_RESULT_SUCCESS;
 
     //  Is the problem small enough to solve for it directly?
-    if (npts < DIRECT_SOLVER_LIMIT)
+    if (npts < DIRECT_SOLVER_LIMIT || cfg->direct)
     {
-        printf("Running the direct solver on an %u by %u problem\n", npts, npts);
-        res = jmtxd_convert_crs_to_brm(mat, &banded, NULL);
+        jmtxd_matrix_brm* banded = NULL, *l = NULL, *u = NULL;
+        if (cfg->verbose) printf("Running the direct solver on an %u by %u problem\n", npts, npts);
+        res = jmtxd_convert_crs_to_brm(mat, &banded, allocator_callbacks);
         if (res != JMTX_RESULT_SUCCESS)
         {
             return res;
         }
-        res = jmtxd_decompose_lu_brm(banded, &l, &u, NULL);
+        res = jmtxd_decompose_lu_brm(banded, &l, &u, allocator_callbacks);
         jmtxd_matrix_brm_destroy(banded);
         if (res != JMTX_RESULT_SUCCESS)
         {
@@ -133,99 +135,106 @@ static inline jmtx_result solve_the_system_of_equations(const unsigned npts, con
         jmtxd_solve_direct_lu_brm(l, u, yrhs, out_y);
         jmtxd_matrix_brm_destroy(l);
         jmtxd_matrix_brm_destroy(u);
+        *rx = -1;
+        *ry = -1;
         return JMTX_RESULT_SUCCESS;
     }
 
     jmtxd_solver_arguments argsx =
         {
-        .in_convergence_criterion = 1e-9,
-        .in_max_iterations = 1000,
+        .in_convergence_criterion = cfg->tol,
+        .in_max_iterations = cfg->max_iterations,
+        .out_last_error = 1.0,  //  This is here in case we don't run GMRESR
+        };
+    jmtxd_solver_arguments args_smoother =
+        {
+        .in_convergence_criterion = 0,
+        .in_max_iterations = cfg->smoother_rounds,
         .out_last_error = 1.0,  //  This is here in case we don't run GMRESR
         };
     jmtxd_solver_arguments argsy =
         {
-        .in_convergence_criterion = 1e-9,
-        .in_max_iterations = 1000,
+        .in_convergence_criterion = cfg->tol,
+        .in_max_iterations = cfg->max_iterations,
         .out_last_error = 1.0,  //  This is here in case we don't run GMRESR
     };
 
-    double* const aux1 = calloc(npts, sizeof*aux1);
-    assert(aux1);
-    double* const aux2 = calloc(npts, sizeof*aux2);
-    assert(aux2);
-    double* const aux3 = calloc(npts, sizeof*aux3);
-    assert(aux3);
-    double* const aux4 = calloc(npts, sizeof*aux4);
-    assert(aux4);
-    double* const aux5 = calloc(npts, sizeof*aux5);
-    assert(aux5);
-    double* const aux6 = calloc(npts, sizeof*aux6);
-    assert(aux6);
-    double* const auxvecs1 = calloc(npts*GMRESR_MLIM, sizeof*auxvecs1);
-    assert(auxvecs1);
-    double* const auxvecs2 = calloc(npts*GCR_TRUNCATION_LIM, sizeof*auxvecs2);
-    assert(auxvecs2);
-    double* const auxvecs3 = calloc(npts*GCR_TRUNCATION_LIM, sizeof*auxvecs3);
-    assert(auxvecs3);
-
-    if (npts < GMRESR_SOLVER_LIMIT)
+    double* const aux1 = allocator->alloc(allocator, npts * sizeof*aux1);
+    double* const aux2 = allocator->alloc(allocator, npts * sizeof*aux2);
+    double* const aux3 = allocator->alloc(allocator, npts * sizeof*aux3);
+    double* const aux4 = allocator->alloc(allocator, npts * sizeof*aux4);
+    double* const aux5 = allocator->alloc(allocator, npts * sizeof*aux5);
+    double* const aux6 = allocator->alloc(allocator, npts * sizeof*aux6);
+    double* const aux7 = allocator->alloc(allocator, npts * sizeof*aux7);
+    double* const aux8 = allocator->alloc(allocator, npts * sizeof*aux8);
+    if (!aux1 || !aux2 || !aux3 || !aux4 || !aux5 || !aux6 || !aux7 || !aux8)
     {
-        printf("Running GMRESR on an %u by %u problem\n", npts, npts);
-        jmtxd_matrix_brm* aux_mat_gmresr;
-        res = jmtxd_matrix_brm_new(&aux_mat_gmresr, GMRESR_MLIM, GMRESR_MLIM, GMRESR_MLIM-1, 0, NULL, NULL);
-        if (res != JMTX_RESULT_SUCCESS)
-        {
-            goto end;
-        }
-        argsx.in_max_iterations = 64;
-        jmtxd_solve_iterative_gmresr_crs(mat, xrhs, out_x, GMRESR_MLIM, GCR_TRUNCATION_LIM, aux_mat_gmresr,
-        aux1, aux2, aux3, aux4, aux5, aux6, auxvecs1, auxvecs2, auxvecs3, &argsx);
-        printf("GMRESR for the x equation finished in %u iterations with an error of %g\n", argsx.out_last_iteration, argsx.out_last_error);
-        if (!isfinite(argsx.out_last_error))
-        {
-            argsx.out_last_error = 1;
-            memset(out_x, 0, npts*sizeof(*out_x));
-        }
-        argsx.in_max_iterations = 1024;
-        argsy.in_max_iterations = 64;
-        jmtxd_solve_iterative_gmresr_crs(mat, yrhs, out_y, GMRESR_MLIM, GCR_TRUNCATION_LIM, aux_mat_gmresr,
-                aux1, aux2, aux3, aux4, aux5, aux6, auxvecs1, auxvecs2, auxvecs3, &argsy);
-        printf("GMRESR for the y equation finished in %u iterations with an error of %g\n", argsx.out_last_iteration, argsx.out_last_error);
-        if (!isfinite(argsy.out_last_error))
-        {
-            argsy.out_last_error = 1;
-            memset(out_y, 0, npts*sizeof(*out_y));
-        }
-        argsx.in_max_iterations = 1024;
-
-        jmtxd_matrix_brm_destroy(aux_mat_gmresr);
+        res = JMTX_RESULT_BAD_ALLOC;
+        goto end;
     }
 
-    if (argsx.out_last_error > argsx.in_convergence_criterion)
+
+    jmtxd_matrix_crs* l, *u;
+    jmtxd_matrix_ccs* ccs_u;
+
+    res = jmtxd_decompose_ilu_crs(mat, &l, &ccs_u, allocator_callbacks);
+    if (res != JMTX_RESULT_SUCCESS)
     {
-        printf("Running ILU on an %u by %u problem\n", npts, npts);
-        r1 = jmtxd_solve_iterative_ilu_crs_parallel(mat, xrhs, out_x, aux1, &argsx, NULL);
-        // r1 = jmtxd_solve_iterative_bicgstab_crs(mat, xrhs, out_x, aux1, aux2, aux3, aux4, aux5, aux6, &argsx);
-        printf("ILU for the x equation finished in %u iterations with an error of %g\n", argsx.out_last_iteration, argsx.out_last_error);
+        goto end;
     }
-    if (argsy.out_last_error > argsy.in_convergence_criterion)
+    res = jmtxd_convert_ccs_to_crs(ccs_u, &u, allocator_callbacks);
+    jmtxd_matrix_ccs_destroy(ccs_u);
+    if (res != JMTX_RESULT_SUCCESS)
     {
-        printf("Running ILU on an %u by %u problem\n", npts, npts);
-        r2 = jmtxd_solve_iterative_ilu_crs_parallel(mat, yrhs, out_y, aux1, &argsy, NULL);
-        // r2 = jmtxd_solve_iterative_bicgstab_crs(mat, xrhs, out_x, aux1, aux2, aux3, aux4, aux5, aux6, &argsy);
-        printf("ILU for the x equation finished in %u iterations with an error of %g\n", argsy.out_last_iteration, argsy.out_last_error);
+        jmtxd_matrix_crs_destroy(l);
+        goto end;
     }
+
+    for (unsigned i = 0; i < cfg->max_rounds; ++i)
+    {
+        if (cfg->verbose) printf("Running PILUBICGSTAB on an %u by %u problem\n", npts, npts);
+        r1 = jmtxd_solve_iterative_pilubicgstab_crs(mat, l, u, xrhs, out_x, aux1, aux2, aux3, aux4, aux5, aux6, aux7, aux8, &argsx);
+        if (cfg->verbose) printf("PILUBICGSTAB for the x equation finished in %u iterations with an error of %g\n", argsx.out_last_iteration, argsx.out_last_error);
+        if (argsx.out_last_error < argsx.in_convergence_criterion)
+        {
+            break;
+        }
+        if (cfg->smoother_rounds)
+        {
+            r1 = jmtxd_solve_iterative_ilu_crs_precomputed(mat, l, u, xrhs, out_x, aux1, &args_smoother);
+        }
+    }
+
+    for (unsigned i = 0; i < cfg->max_rounds; ++i)
+    {
+        if (cfg->verbose) printf("Running PILUBICGSTAB on an %u by %u problem\n", npts, npts);
+        r2 = jmtxd_solve_iterative_pilubicgstab_crs(mat, l, u, yrhs, out_y, aux1, aux2, aux3, aux4, aux5, aux6, aux7, aux8, &argsy);
+        if (cfg->verbose) printf("PILUBICGSTAB for the y equation finished in %u iterations with an error of %g\n", argsy.out_last_iteration, argsy.out_last_error);
+        if (argsy.out_last_error < argsy.in_convergence_criterion)
+        {
+            break;
+        }
+        if (cfg->smoother_rounds)
+        {
+            r1 = jmtxd_solve_iterative_ilu_crs_precomputed(mat, l, u, yrhs, out_y, aux1, &args_smoother);
+        }
+    }
+
+    jmtxd_matrix_crs_destroy(l);
+    jmtxd_matrix_crs_destroy(u);
+
 
 end:
-    free(auxvecs3);
-    free(auxvecs2);
-    free(auxvecs1);
-    free(aux6);
-    free(aux5);
-    free(aux4);
-    free(aux3);
-    free(aux2);
-    free(aux1);
+    allocator->free(allocator, aux8);
+    allocator->free(allocator, aux7);
+    allocator->free(allocator, aux6);
+    allocator->free(allocator, aux5);
+    allocator->free(allocator, aux4);
+    allocator->free(allocator, aux3);
+    allocator->free(allocator, aux2);
+    allocator->free(allocator, aux1);
+    *rx = argsx.out_last_error;
+    *ry = argsy.out_last_error;
 
     if (r1 != JMTX_RESULT_SUCCESS)
     {
@@ -240,11 +249,11 @@ end:
 }
 
 
-static inline void free_block_info(block_info* info)
+static inline void free_block_info(block_info* info, allocator* allocator)
 {
-    free(info->points); info->points = NULL;
-    free(info->lines); info->lines = NULL;
-    free(info->surfaces); info->surfaces = NULL;
+    allocator->free(allocator, info->points); info->points = NULL;
+    allocator->free(allocator, info->lines); info->lines = NULL;
+    allocator->free(allocator, info->surfaces); info->surfaces = NULL;
 }
 
 
@@ -377,17 +386,26 @@ static inline void set_neighboring_block(block_info* bi, boundary_id id, int blo
     }
 }
 
-static error_id generate_mesh2d_from_geometry(unsigned n_blocks, const mesh2d_block* blocks, mesh2d* p_out, const mesh_geo_args args)
+static error_id generate_mesh2d_from_geometry(unsigned n_blocks, const mesh2d_block* blocks, mesh2d* p_out, allocator* allocator, const mesh_geo_args args, const solver_config* cfg, double* rx, double* ry)
 {
     //  Remove duplicate points by averaging over them
     block_info* info = args.info;
     unsigned unique_pts = 0;
-    unsigned* division_factor = calloc(args.point_cnt, sizeof*division_factor);
-    assert(division_factor);
-    double* newx = calloc(args.point_cnt, sizeof*newx);
-    double* newy = calloc(args.point_cnt, sizeof*newy);
-    assert(newx);
-    assert(newy);
+    unsigned* division_factor = allocator->alloc(allocator, args.point_cnt * sizeof*division_factor);
+    double* newx = allocator->alloc(allocator, args.point_cnt * sizeof*newx);
+    double* newy = allocator->alloc(allocator, args.point_cnt * sizeof*newy);
+    line* line_array = allocator->alloc(allocator, args.max_lines * sizeof(*line_array));
+    unsigned surf_count = 0;
+    surface* surfaces = allocator->alloc(allocator, args.max_surfaces * sizeof*surfaces);
+    if (!division_factor || !newx || !newy || !line_array || !surfaces)
+    {
+        allocator->free(allocator, surfaces);
+        allocator->free(allocator, line_array);
+        allocator->free(allocator, newy);
+        allocator->free(allocator, newx);
+        allocator->free(allocator, division_factor);
+        return MESH_ALLOCATION_FAILED;
+    }
 
     for (unsigned i = 0; i < n_blocks; ++i)
     {
@@ -498,11 +516,9 @@ static error_id generate_mesh2d_from_geometry(unsigned n_blocks, const mesh2d_bl
         assert(tmp);
         newy = tmp;
     }
-    free(division_factor);
+    allocator->free(allocator, division_factor);
 
 
-    line* line_array = calloc(args.max_lines, sizeof(*line_array));
-    assert(line_array);
 
     // Create mesh line info
     unsigned line_count = 1;
@@ -567,9 +583,6 @@ static error_id generate_mesh2d_from_geometry(unsigned n_blocks, const mesh2d_bl
     }
     line_count -= 1;
 
-    unsigned surf_count = 0;
-    surface* surfaces = calloc(args.max_surfaces, sizeof*surfaces);
-    assert(surfaces);
     for (unsigned i = 0; i < n_blocks; ++i)
     {
         block_info* bi = info + i;
@@ -664,20 +677,28 @@ error_id mesh2d_check_blocks(unsigned n_blocks, const mesh2d_block* blocks)
     return ret;
 }
 
-error_id mesh2d_create_elliptical(unsigned int n_blocks, const mesh2d_block* blocks, mesh2d* p_out)
+error_id mesh2d_create_elliptical(unsigned n_blocks, const mesh2d_block* blocks, const solver_config* cfg, allocator* allocator, mesh2d* p_out, double* rx, double* ry)
 {
+    jmtx_allocator_callbacks allocator_callbacks =
+        {
+            .alloc = allocator->alloc,
+            .free = allocator->free,
+            .realloc = allocator->realloc,
+            .state = (void*)0xB16B00B135,
+        };
     error_id ret = MESH_SUCCESS;
     unsigned point_cnt = 0;
     unsigned max_lines = 0;
     unsigned max_surfaces = 0;
-    unsigned* block_offsets = calloc(n_blocks, sizeof*block_offsets);
-    assert(block_offsets);
-    memset(block_offsets, 0, n_blocks * sizeof(*block_offsets));
-    block_info* info = calloc(n_blocks, sizeof*info);
-    assert(info);
-    for (unsigned i = 0; i < n_blocks; ++i)
+    unsigned* block_offsets = allocator->alloc(allocator, n_blocks * sizeof*block_offsets);
+    block_info* info = allocator->alloc(allocator, n_blocks * sizeof*info);
+    if (!block_offsets || !info)
     {
+        allocator->free(allocator, block_offsets);
+        allocator->free(allocator, info);
+        return MESH_ALLOCATION_FAILED;
     }
+    memset(block_offsets, 0, n_blocks * sizeof(*block_offsets));
     for (unsigned iblk = 0; iblk < n_blocks; ++iblk)
     {
         const mesh2d_block* const blk = blocks + iblk;
@@ -700,12 +721,12 @@ error_id mesh2d_create_elliptical(unsigned int n_blocks, const mesh2d_block* blo
         unsigned n2 = nnorth;
         info[iblk].n1 = n1;
         info[iblk].n2 = n2;
-        info[iblk].points = calloc(n1 * n2, sizeof(*info[iblk].points));
+        info[iblk].points = allocator->alloc(allocator, n1 * n2 * sizeof(*info[iblk].points));
         assert(info[iblk].points);
         memset(info[iblk].points, ~0u, n1 * n2 * sizeof(*info[iblk].points));
-        info[iblk].lines = calloc(n1 * (n2 - 1) + (n1 - 1) * n2, sizeof(*info[iblk].lines));
+        info[iblk].lines = allocator->alloc(allocator, (n1 * (n2 - 1) + (n1 - 1) * n2) * sizeof(*info[iblk].lines));
         assert(info[iblk].lines);
-        info[iblk].surfaces = calloc((n1 - 1) * (n2 - 1), sizeof(*info[iblk].surfaces));
+        info[iblk].surfaces = allocator->alloc(allocator, (n1 - 1) * (n2 - 1) * sizeof(*info[iblk].surfaces));
         assert(info[iblk].surfaces);
         info[iblk].neighboring_block_idx.north = -1;
         info[iblk].neighboring_block_idx.south = -1;
@@ -720,25 +741,38 @@ error_id mesh2d_create_elliptical(unsigned int n_blocks, const mesh2d_block* blo
         max_surfaces += (n1 - 1) * (n2 - 1);
     }
 
-    double* xrhs = calloc(point_cnt, sizeof*xrhs);
-    assert(xrhs);
-    double* yrhs = calloc(point_cnt, sizeof*yrhs);
-    assert(yrhs);
-    double* xnodal = calloc(point_cnt, sizeof*xnodal);
-    assert(xnodal);
-    double* ynodal = calloc(point_cnt, sizeof*ynodal);
-    assert(ynodal);
-
+    double* xrhs = allocator->alloc(allocator, point_cnt * sizeof*xrhs);
+    double* yrhs = allocator->alloc(allocator, point_cnt * sizeof*yrhs);
+    double* xnodal = allocator->alloc(allocator, point_cnt * sizeof*xnodal);
+    double* ynodal = allocator->alloc(allocator, point_cnt * sizeof*ynodal);
+    if (!xrhs || !yrhs || !xnodal || !ynodal)
+    {
+        for (unsigned i = 0; i < n_blocks; ++i)
+        {
+            free_block_info(info + i, allocator);
+        }
+        allocator->free(allocator, xrhs);
+        allocator->free(allocator, yrhs);
+        allocator->free(allocator, xnodal);
+        allocator->free(allocator, ynodal);
+        allocator->free(allocator, block_offsets);
+        allocator->free(allocator, info);
+        return MESH_ALLOCATION_FAILED;
+    }
     jmtxd_matrix_crs* system_matrix;
-    jmtx_result res = jmtxds_matrix_crs_new(&system_matrix, point_cnt, point_cnt, 4*point_cnt, NULL);
+    jmtx_result res = jmtxds_matrix_crs_new(&system_matrix, point_cnt, point_cnt, 4*point_cnt, &allocator_callbacks);
     if (res != JMTX_RESULT_SUCCESS)
     {
-        free(ynodal);
-        free(xnodal);
-        free(yrhs);
-        free(xrhs);
-        free(block_offsets);
-        printf("jmtxds_matrix_crs_new(%p, %u, %u, %u, %p), %s: %s\n", &system_matrix, point_cnt, point_cnt, 4*point_cnt, NULL, (4*point_cnt > point_cnt * point_cnt ? "BAD" : "GOOD"), jmtx_result_to_str(res));
+        allocator->free(allocator, ynodal);
+        allocator->free(allocator, xnodal);
+        allocator->free(allocator, yrhs);
+        allocator->free(allocator, xrhs);
+        allocator->free(allocator, block_offsets);
+        for (unsigned i = 0; i < n_blocks; ++i)
+        {
+            free_block_info(info + i, allocator);
+        }
+        allocator->free(allocator, info);
         return MESH_ALLOCATION_FAILED;
     }
 
@@ -1031,8 +1065,8 @@ error_id mesh2d_create_elliptical(unsigned int n_blocks, const mesh2d_block* blo
         }
     }
 
-    res = solve_the_system_of_equations(point_cnt, system_matrix, xrhs, yrhs, xnodal, ynodal);
-    if (res != JMTX_RESULT_SUCCESS)
+    res = solve_the_system_of_equations(point_cnt, system_matrix, xrhs, yrhs, xnodal, ynodal, allocator, &allocator_callbacks, cfg, rx, ry);
+    if ((res != JMTX_RESULT_SUCCESS && cfg->strict) || (res != JMTX_RESULT_SUCCESS && res != JMTX_RESULT_NOT_CONVERGED))
     {
         ret = MESH_SOLVER_FAILED;
     }
@@ -1041,16 +1075,16 @@ cleanup_matrix:
     jmtxd_matrix_crs_destroy(system_matrix);
     if (ret != MESH_SUCCESS)
     {
-        free(ynodal);
-        free(xnodal);
-        free(yrhs);
-        free(xrhs);
-        free(block_offsets);
+        allocator->free(allocator, ynodal);
+        allocator->free(allocator, xnodal);
+        allocator->free(allocator, yrhs);
+        allocator->free(allocator, xrhs);
+        allocator->free(allocator, block_offsets);
         return ret;
     }
 
 
-    ret = generate_mesh2d_from_geometry(n_blocks, blocks, p_out,
+    ret = generate_mesh2d_from_geometry(n_blocks, blocks, p_out, allocator,
         (mesh_geo_args){
             .point_cnt = point_cnt,
             .max_lines = max_lines,
@@ -1059,32 +1093,35 @@ cleanup_matrix:
             .xnodal = xnodal,
             .ynodal = ynodal,
             .info = info,
-        });
+        }, cfg, rx, ry);
     if (ret != MESH_SUCCESS)
     {
-        free_block_info(info);
-        free(info);
+        for (unsigned i = 0; i < n_blocks; ++i)
+        {
+            free_block_info(info + i, allocator);
+        }
+        allocator->free(allocator, info);
     }
-    free(ynodal);
-    free(xnodal);
-    free(yrhs);
-    free(xrhs);
-    free(block_offsets);
+    allocator->free(allocator, ynodal);
+    allocator->free(allocator, xnodal);
+    allocator->free(allocator, yrhs);
+    allocator->free(allocator, xrhs);
+    allocator->free(allocator, block_offsets);
 
 
     return ret;
 }
 
 
-void mesh_destroy(mesh2d* mesh)
+void mesh_destroy(mesh2d* mesh, allocator* allocator)
 {
-    free(mesh->p_x);
-    free(mesh->p_y);
-    free(mesh->p_lines);
-    free(mesh->p_surfaces);
+    allocator->free(allocator, mesh->p_x);
+    allocator->free(allocator, mesh->p_y);
+    allocator->free(allocator, mesh->p_lines);
+    allocator->free(allocator, mesh->p_surfaces);
     for (unsigned i = 0; i < mesh->n_blocks; ++i)
     {
-        free_block_info(mesh->block_info + i);
+        free_block_info(mesh->block_info + i, allocator);
     }
-    free(mesh->block_info);
+    allocator->free(allocator, mesh->block_info);
 }

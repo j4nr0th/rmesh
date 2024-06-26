@@ -80,11 +80,35 @@ static PyGetSetDef mesh_getset[] =
         {NULL} //  Sentinel
     };
 
-
-void mesh_dtor(PyObject* self)
+static void* wrap_alloc(void* state, size_t sz)
 {
+    (void)state;
+    return PyMem_MALLOC(sz);
+}
+
+static void* wrap_realloc(void* state, void* ptr, size_t newsz)
+{
+    (void)state;
+    return PyMem_REALLOC(ptr, newsz);
+}
+
+static void wrap_free(void* state, void* ptr)
+{
+    (void)state;
+    PyMem_FREE(ptr);
+}
+
+
+static void mesh_dtor(PyObject* self)
+{
+    allocator a =
+        {
+        .alloc = wrap_alloc,
+        .realloc = wrap_realloc,
+        .free = wrap_free
+    };
     PyMesh2dObject* this = (PyMesh2dObject*)self;
-    mesh_destroy(&this->data);
+    mesh_destroy(&this->data, &a);
 }
 
 static PyTypeObject mesh_type =
@@ -102,20 +126,30 @@ static PyTypeObject mesh_type =
 
 
 
+
 //  Mesh creation function
-
-
 static PyObject* rmsh_create_mesh_function(PyObject* self, PyObject* args)
 {
     PyListObject* input_list = NULL;
+    PyTupleObject* options = NULL;
     int b_verbose = 0;
-    int b_direct = 0;
-    if (!PyArg_ParseTuple(args, "O!pp", &PyList_Type, &input_list, &b_verbose, &b_direct))
+    if (!PyArg_ParseTuple(args, "O!pO!", &PyList_Type, &input_list, &b_verbose, &PyTuple_Type, &options))
     {
         //  Failed parsing the input for some reason, return NULL
         return NULL;
     }
+
+    //  Unpack solver options
+    solver_config cfg;
+    if (!PyArg_ParseTuple((PyObject*)options, "pdIIIp", &cfg.direct, &cfg.tol, &cfg.smoother_rounds, &cfg.max_iterations, &cfg.max_rounds, &cfg.strict))
+    {
+        return NULL;
+    }
+    cfg.verbose = b_verbose;
     if (b_verbose) printf("Parsed the input args\n");
+
+
+
     //  Convert to usable form
     const unsigned n_blocks = PyList_GET_SIZE(input_list);
     mesh2d_block* p_blocks = PyMem_MALLOC(n_blocks * sizeof*p_blocks);
@@ -238,16 +272,44 @@ static PyObject* rmsh_create_mesh_function(PyObject* self, PyObject* args)
         return NULL;
     }
     if (b_verbose) printf("Calling the mesh function\n");
-    const error_id e = mesh2d_create_elliptical(n_blocks, p_blocks, &msh->data);
+    allocator a =
+        {
+            .alloc = wrap_alloc,
+            .realloc = wrap_realloc,
+            .free = wrap_free
+        };
+    double rx, ry;
+    const error_id e = mesh2d_create_elliptical(n_blocks, p_blocks, &cfg, &a, &msh->data, &rx, &ry);
     PyMem_FREE(p_blocks);
     if (e != MESH_SUCCESS)
     {
         Py_DECREF(msh);
         return PyErr_Format(PyExc_RuntimeError, "Failed mesh creation (error code %u)", (unsigned)e);
     }
-    if (b_verbose) printf("Returning from the function\n");
+    PyObject* ox = PyFloat_FromDouble(rx);
+    if (!ox)
+    {
+        Py_DECREF(msh);
+        return NULL;
+    }
+    PyObject* oy = PyFloat_FromDouble(ry);
+    if (!oy)
+    {
+        Py_DECREF(ox);
+        Py_DECREF(msh);
+        return NULL;
+    }
+    PyObject* tout = PyTuple_Pack(3, msh, ox, oy);
+    if (!tout)
+    {
+        Py_DECREF(oy);
+        Py_DECREF(ox);
+        Py_DECREF(msh);
+        return NULL;
+    }
 
-    return (PyObject*)msh;
+    if (b_verbose) printf("Returning from the function\n");
+    return tout;
 }
 
 
