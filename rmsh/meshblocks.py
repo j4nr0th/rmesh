@@ -100,7 +100,7 @@ def _curves_have_common_point(c1: BoundaryCurve, c2: BoundaryCurve) -> bool:
     p12 = (c1.x[-1], c1.y[-1])
     p21 = (c2.x[0], c2.y[0])
     p22 = (c2.x[-1], c2.y[-1])
-    return p11 == p21 or p11 == p22 or p12 == p21 or p12 == p22
+    return np.allclose(p11, p21) or np.allclose(p11, p22) or np.allclose(p12, p21) or np.allclose(p12, p22)
 
 
 @dataclass
@@ -110,7 +110,6 @@ class SolverConfig:
     smoother_rounds: int = 16
     max_iterations: int = 128
     max_rounds: int = 8
-    strict: bool = True
 
 
 def create_elliptical_mesh(blocks: Sequence[MeshBlock], *, verbose: bool = False, allow_insane: bool = False,
@@ -176,13 +175,13 @@ def create_elliptical_mesh(blocks: Sequence[MeshBlock], *, verbose: bool = False
                 if type(bndleft) is BoundaryCurve:
                     bndleft: BoundaryCurve
                     if not _curves_have_common_point(bnd, bndleft):
-                        raise RuntimeError(f"Block {b.label} has curves as boundaries {bid.name} and {bleft.name}, but"
+                        raise RuntimeWarning(f"Block {b.label} has curves as boundaries {bid.name} and {bleft.name}, but"
                                            f" they have no common points. To allow such meshes to be counted as valid, "
                                            f"call this function with \"allow_insane=True\"")
                 if type(bndright) is BoundaryCurve:
                     bndright: BoundaryCurve
                     if not _curves_have_common_point(bnd, bndright):
-                        raise RuntimeError(f"Block {b.label} has curves as boundaries {bid.name} and {bright.name}, but"
+                        raise RuntimeWarning(f"Block {b.label} has curves as boundaries {bid.name} and {bright.name}, but"
                                            f" they have no common points. To allow such meshes to be counted as valid, "
                                            f"call this function with \"allow_insane=True\"")
             bnd_lens[bid] = nbnd
@@ -222,7 +221,7 @@ def create_elliptical_mesh(blocks: Sequence[MeshBlock], *, verbose: bool = False
               boundaries[BoundaryId.BoundaryEast], boundaries[BoundaryId.BoundaryWest])
         inputs.append(bv)
     extra = (solver_cfg.force_direct, solver_cfg.tolerance, solver_cfg.smoother_rounds, solver_cfg.max_iterations,
-             solver_cfg.max_rounds, solver_cfg.strict)
+             solver_cfg.max_rounds)
     data, rx, ry = _cem(inputs, verbose, extra)
 
     return Mesh2D(data), rx, ry

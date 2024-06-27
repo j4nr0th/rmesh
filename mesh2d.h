@@ -74,7 +74,6 @@ struct solver_config_struct
     unsigned max_iterations;
     unsigned max_rounds;
     int verbose;
-    int strict;
 };
 
 typedef struct allocator_struct allocator;

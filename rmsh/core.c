@@ -141,7 +141,7 @@ static PyObject* rmsh_create_mesh_function(PyObject* self, PyObject* args)
 
     //  Unpack solver options
     solver_config cfg;
-    if (!PyArg_ParseTuple((PyObject*)options, "pdIIIp", &cfg.direct, &cfg.tol, &cfg.smoother_rounds, &cfg.max_iterations, &cfg.max_rounds, &cfg.strict))
+    if (!PyArg_ParseTuple((PyObject*)options, "pdIII", &cfg.direct, &cfg.tol, &cfg.smoother_rounds, &cfg.max_iterations, &cfg.max_rounds))
     {
         return NULL;
     }

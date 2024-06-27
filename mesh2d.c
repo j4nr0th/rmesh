@@ -1066,7 +1066,7 @@ error_id mesh2d_create_elliptical(unsigned n_blocks, const mesh2d_block* blocks,
     }
 
     res = solve_the_system_of_equations(point_cnt, system_matrix, xrhs, yrhs, xnodal, ynodal, allocator, &allocator_callbacks, cfg, rx, ry);
-    if ((res != JMTX_RESULT_SUCCESS && cfg->strict) || (res != JMTX_RESULT_SUCCESS && res != JMTX_RESULT_NOT_CONVERGED))
+    if (res != JMTX_RESULT_SUCCESS && res != JMTX_RESULT_NOT_CONVERGED)
     {
         ret = MESH_SOLVER_FAILED;
     }
