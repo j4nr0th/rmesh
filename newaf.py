@@ -595,24 +595,41 @@ b_dict[28] = make_bblock_from_tc(28, tc_dict,46, -48, -42, 45)
 b_dict[29] = make_bblock_from_tc(29, tc_dict,10, -3, -11, -17)
 
 
-m, rx, ry = mb.create_elliptical_mesh([b for b in b_dict.values()], verbose=True, solver_cfg=mb.SolverConfig(strict=True))
+m, rx, ry = mb.create_elliptical_mesh([b for b in b_dict.values()], verbose=True)
 
 x = m.x
 y = m.y
 ln = m.lines
+ncols = len(m.block_names)
+cmap = plt.colormaps.get_cmap("plasma")
+i = 0
+for bname in m.block_names:
+    line_indices = np.abs(m.block_lines(bname)) - 1
+    block_lines = ln[line_indices]
+    xb = x[block_lines[:, 0]]
+    yb = y[block_lines[:, 0]]
+    xe = x[block_lines[:, 1]]
+    ye = y[block_lines[:, 1]]
+    rb = np.stack((xb, yb), axis=1)
+    re = np.stack((xe, ye), axis=1)
+    lnvals = np.stack((rb, re), axis=1)
+    plt.gca().add_collection(col.LineCollection(lnvals, color=cmap(i/(ncols-1)), label=bname))
+    i+=1
+
+plt.legend()
 # lnvals = []
-xb = x[ln[:, 0]]
-yb = y[ln[:, 0]]
-xe = x[ln[:, 1]]
-ye = y[ln[:, 1]]
-
-rb = np.stack((xb, yb), axis=1)
-re = np.stack((xe, ye), axis=1)
-# for i in range(ln.shape[0]):
-#     lnvals.append((rb[i, :], re[i, :]))#[(xb[i], yb[i]), (xe[i], ye[i])])
-lnvals = np.stack((rb, re), axis=1)
-
-plt.gca().add_collection(col.LineCollection(lnvals, linestyle="dashed", color="black"))
+# xb = x[ln[:, 0]]
+# yb = y[ln[:, 0]]
+# xe = x[ln[:, 1]]
+# ye = y[ln[:, 1]]
+#
+# rb = np.stack((xb, yb), axis=1)
+# re = np.stack((xe, ye), axis=1)
+# # for i in range(ln.shape[0]):
+# #     lnvals.append((rb[i, :], re[i, :]))#[(xb[i], yb[i]), (xe[i], ye[i])])
+# lnvals = np.stack((rb, re), axis=1)
+#
+# plt.gca().add_collection(col.LineCollection(lnvals, linestyle="dashed", color="black"))
 # plt.scatter(x, y)
 #     plt.plot((x[ln[i, 0]], x[ln[i, 1]]), (y[ln[i, 0]], y[ln[i, 1]]), color="black", linestyle="dashed")
 

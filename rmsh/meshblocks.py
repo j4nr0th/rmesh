@@ -48,9 +48,11 @@ def connect_mesh_blocks(b1: MeshBlock, id1: BoundaryId, b2: MeshBlock, id2: Boun
 
 class Mesh2D:
     _internal = None
+    _block_name_map = None
 
-    def __init__(self, data):
+    def __init__(self, data, name_map):
         self._internal = data
+        self._block_name_map = name_map
 
     @property
     def x(self) -> np.ndarray:
@@ -69,6 +71,14 @@ class Mesh2D:
     def surfaces(self) -> np.ndarray:
         sidx = self._internal.s
         return np.reshape(sidx, (-1, 4))
+
+    def block_lines(self, id) -> np.ndarray:
+        a = self._internal.blines(self._block_name_map[id])
+        return a
+
+    @property
+    def block_names(self) -> list[str]:
+        return [s for s in self._block_name_map.keys()]
 
 
 def _find_boundary_size(bnd: BoundaryBlock, blcks: dict[str, tuple[int, MeshBlock]], first: BoundaryBlock|None) -> int:
@@ -223,5 +233,7 @@ def create_elliptical_mesh(blocks: Sequence[MeshBlock], *, verbose: bool = False
     extra = (solver_cfg.force_direct, solver_cfg.tolerance, solver_cfg.smoother_rounds, solver_cfg.max_iterations,
              solver_cfg.max_rounds)
     data, rx, ry = _cem(inputs, verbose, extra)
-
-    return Mesh2D(data), rx, ry
+    name_map = dict()
+    for k in bdict:
+        name_map[k] = bdict[k][0]
+    return Mesh2D(data, name_map), rx, ry

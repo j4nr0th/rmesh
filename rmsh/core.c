@@ -71,6 +71,27 @@ static PyObject* mesh_gets(PyObject* self, void* unused)
     return PyArray_SimpleNewFromData(1, &dims, NPY_INT32, this->data.p_surfaces);
 }
 
+static PyObject* mesh_block_lines(PyObject* self, PyObject* v)
+{
+    PyMesh2dObject* this = (PyMesh2dObject*)self;
+    const long idx = PyLong_AsLong(v);
+    if (PyErr_Occurred())
+    {
+        return NULL;
+    }
+    if (idx >= this->data.n_blocks || idx < 0)
+    {
+        return PyErr_Format(PyExc_IndexError, "Block index %l was out of bounds [0, %u)", idx, this->data.n_blocks);
+    }
+    if (this->data.block_info == NULL)
+    {
+        Py_RETURN_NONE;
+    }
+    npy_intp dims = (this->data.block_info[idx].n1 - 1) * this->data.block_info[idx].n2 +
+        (this->data.block_info[idx].n2 - 1) * this->data.block_info[idx].n1;
+    return PyArray_SimpleNewFromData(1, &dims, NPY_INT32, this->data.block_info[idx].lines);
+}
+
 static PyGetSetDef mesh_getset[] =
     {
         {"x", mesh_getx, NULL, "X coordinates of nodes", NULL},
@@ -78,6 +99,12 @@ static PyGetSetDef mesh_getset[] =
         {"l", mesh_getl, NULL, "line indices", NULL},
         {"s", mesh_gets, NULL, "surface indices", NULL},
         {NULL} //  Sentinel
+    };
+
+static PyMethodDef mesh_methods[] =
+    {
+        {.ml_name = "blines", .ml_meth = mesh_block_lines, .ml_flags = METH_O, .ml_doc = "retrieves indices of lines which are in a block with the given index"},
+        {NULL}  //  Sentinel
     };
 
 static void* wrap_alloc(void* state, size_t sz)
@@ -122,6 +149,7 @@ static PyTypeObject mesh_type =
         .tp_new = PyType_GenericNew,
         .tp_getset = mesh_getset,
         .tp_finalize = mesh_dtor,
+        .tp_methods = mesh_methods,
     };
 
 
