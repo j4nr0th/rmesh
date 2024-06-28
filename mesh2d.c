@@ -312,29 +312,43 @@ static inline unsigned line_boundary_index_reverse(const block_info* block, cons
     switch (id)
     {
     case BOUNDARY_ID_SOUTH:
-        return ((block->n2 - 1) - idx); //  From 0 to block->n2 - 1
+        return ((block->n2 - 2) - idx); //  From 0 to block->n2 - 1
     case BOUNDARY_ID_NORTH:
         return ((block->n1) * (block->n2 - 1) - (idx + 1)); //  From 0 to block->n2 - 1
     case BOUNDARY_ID_WEST:
-        return (block->n1 * (block->n2 - 1) + (block->n1 - 1 - idx)); //    From 0 to block->n1 - 1
+        return (block->n1 * (block->n2 - 1) + (block->n1 - 2 - idx)); //    From 0 to block->n1 - 1
     case BOUNDARY_ID_EAST:
-        return (block->n1 * (block->n2 - 1) + (block->n1 - 1) * (block->n2) + (block->n1 - 1 - idx)); //    From 0 to block->n1 - 1
+        return block->n1 * (block->n2 - 1) + (block->n1 - 1) * (block->n2 - 1) + (block->n1 - 2 - idx); //    From 0 to block->n1 - 1
     }
     return 0;
 }
 
 static inline void deal_with_line_boundary(const boundary_block* boundary, const block_info* info_owner, const block_info* info_target)
 {
-    static const int bnd_map[] =
-        {
-        [BOUNDARY_ID_NORTH] = 1,
-        [BOUNDARY_ID_SOUTH] = -1,
-        [BOUNDARY_ID_EAST] = 1,
-        [BOUNDARY_ID_WEST] = -1,
-        };
     //  When this is 1 we reverse, when it's -1 we do not
-    const int reversed = bnd_map[boundary->owner_id] * bnd_map[boundary->target_id];
-    if (reversed > 0)
+    int reversed = boundary->owner_id == boundary->target_id;
+    if (!reversed)
+    {
+        switch (boundary->owner_id)
+        {
+        case BOUNDARY_ID_NORTH:
+            reversed = (boundary->target_id == BOUNDARY_ID_WEST);
+            break;
+        case BOUNDARY_ID_WEST:
+            reversed = (boundary->target_id == BOUNDARY_ID_NORTH);
+            break;
+        case BOUNDARY_ID_SOUTH:
+            reversed = (boundary->target_id == BOUNDARY_ID_EAST);
+            break;
+        case BOUNDARY_ID_EAST:
+            reversed = (boundary->target_id == BOUNDARY_ID_SOUTH);
+            break;
+        default:
+            break;
+        }
+    }
+    
+    if (reversed)
     {
         for (unsigned i = 0; i < boundary->n - 1; ++i)
         {

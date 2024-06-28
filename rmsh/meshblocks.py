@@ -30,7 +30,7 @@ class MeshBlock:
                 self.boundaries[bid] = b
             case _:
                 raise RuntimeError("Invalid value of boundary id was specified")
-        if prev is not None:
+        if prev is not None and b is not None:
             raise RuntimeWarning(f"Boundary with id {bid.name} for block {self.label} was set, but was not None "
                                  f"previously (was {type(prev)} instead)")
 
@@ -81,29 +81,43 @@ class Mesh2D:
         return [s for s in self._block_name_map.keys()]
 
 
-def _find_boundary_size(bnd: BoundaryBlock, blcks: dict[str, tuple[int, MeshBlock]], first: BoundaryBlock|None) -> int:
-    _, target = blcks[bnd.target]
-    other_bnd = target.boundaries[bnd.target_id]
-    if (first is bnd):
-        raise RuntimeError("Circular reference for block boundaries without specifying their size")
-    if type(other_bnd) is BoundaryBlock:
-        match bnd.target_id:
-            case BoundaryId.BoundaryNorth:
-                other_bnd = target.boundaries[BoundaryId.BoundarySouth]
-            case BoundaryId.BoundarySouth:
-                other_bnd = target.boundaries[BoundaryId.BoundaryNorth]
-            case BoundaryId.BoundaryWest:
-                other_bnd = target.boundaries[BoundaryId.BoundaryEast]
-            case BoundaryId.BoundaryEast:
-                other_bnd = target.boundaries[BoundaryId.BoundaryWest]
-            case _:
-                raise RuntimeError("Invalid boundary type for the block boundary encountered")
-    if type(other_bnd) is BoundaryCurve:
-        return len(other_bnd.x)
-    elif other_bnd.n != 0:
-        return other_bnd.n
-    return _find_boundary_size(other_bnd, blcks, first if first is not None else bnd)
-
+def _find_boundary_size(bnd: BoundaryBlock, blcks: dict[str, tuple[int, MeshBlock]]):
+    if type(bnd) is BoundaryCurve:
+        bnd: BoundaryCurve
+        return len(bnd.x)
+    checked = [bnd]
+    i = 0
+    while True:
+        if type(bnd) == BoundaryCurve:
+            return len(bnd.x)
+        elif bnd.n != 0:
+            return bnd.n
+        _, target = blcks[bnd.target]
+        other_bnd = target.boundaries[bnd.target_id]
+    
+        if type(other_bnd) is BoundaryBlock:
+            match bnd.target_id:
+                case BoundaryId.BoundaryNorth:
+                    new_bnd = target.boundaries[BoundaryId.BoundarySouth]
+                case BoundaryId.BoundarySouth:
+                    new_bnd = target.boundaries[BoundaryId.BoundaryNorth]
+                case BoundaryId.BoundaryWest:
+                    new_bnd = target.boundaries[BoundaryId.BoundaryEast]
+                case BoundaryId.BoundaryEast:
+                    new_bnd = target.boundaries[BoundaryId.BoundaryWest]
+                case _:
+                    raise RuntimeError("Invalid boundary type for the block boundary encountered")
+        else:
+            return len(other_bnd.x)
+        bnd = new_bnd
+        if new_bnd in checked:
+            break
+        else:
+            checked.append(new_bnd)
+        i += 1
+        print(i)
+    raise RuntimeError(f"Circular reference for block boundaries without specifying their size")
+    
 
 def _curves_have_common_point(c1: BoundaryCurve, c2: BoundaryCurve) -> bool:
     p11 = (c1.x[0], c1.y[0])
@@ -160,7 +174,7 @@ def create_elliptical_mesh(blocks: Sequence[MeshBlock], *, verbose: bool = False
                 elif bnd.n != 0:
                     nbnd = bnd.n
                 else:
-                    nbnd = _find_boundary_size(bnd, bdict, None)
+                    nbnd = _find_boundary_size(bnd, bdict)
             #   Check that the corners of curve match up correctly if check is enabled
             elif not allow_insane:
                 bnd: BoundaryCurve

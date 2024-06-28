@@ -46,6 +46,7 @@ class BSpline:
 
 
 def discretize(pts: dict[int, Point], o, n: int, prog: float) -> tuple[np.ndarray, np.ndarray]:
+    prog = 1
     t = np.linspace(0, 1, n) ** prog
     to = type(o)
     if to == Line:
@@ -78,18 +79,18 @@ def transfinite_curve(pts: dict[int, Point], o: Line|BSpline, n: int, prog: floa
     return mb.BoundaryCurve(posx, posy)
 
 
-def make_bblock_from_tc(id: int, tc_dict: dict[int, mb.BoundaryCurve], p1: int, p2: int, p3: int, p4: int) -> mb.MeshBlock:
-    b1 = tc_dict[abs(p1)]
-    b2 = tc_dict[abs(p2)]
-    b3 = tc_dict[abs(p3)]
-    b4 = tc_dict[abs(p4)]
-    if p1 < 0:
+def make_bblock_from_tc(id: int, tc_dict: dict[int, mb.BoundaryCurve], north: int, west: int, south: int, east: int) -> mb.MeshBlock:
+    b1 = tc_dict[abs(north)]
+    b2 = tc_dict[abs(west)]
+    b3 = tc_dict[abs(south)]
+    b4 = tc_dict[abs(east)]
+    if north < 0:
         b1 = mb.BoundaryCurve(np.flip(b1.x), np.flip(b1.y))
-    if p2 < 0:
+    if west < 0:
         b2 = mb.BoundaryCurve(np.flip(b2.x), np.flip(b2.y))
-    if p3 < 0:
+    if south < 0:
         b3 = mb.BoundaryCurve(np.flip(b3.x), np.flip(b3.y))
-    if p4 < 0:
+    if east < 0:
         b4 = mb.BoundaryCurve(np.flip(b4.x), np.flip(b4.y))
 
     print(b1.x[0], b1.y[0])
@@ -453,18 +454,18 @@ pt_dict[713] = Point (P_FLAP_BF_X, P_FLAP_BF_Y + 0.03)
 ln_dict[26] = BSpline (661, 712, 713, 660)
 
 
-N_OUTER = 48
+N_OUTER = 48 * 2
 N_MIDDLE = 24  #  Also goes to the front of the flap
-N_INNER = 24
+N_INNER = 64
 N_FLAP = 32     #  Around the flap
 N_FRONT = 32
 N_WAKE = 64
 N_FLAP_TOP = 24
-N_FLAP_BOTTOM = 48
-N_WING_TOP = 80
+N_FLAP_BOTTOM = 24
+N_WING_TOP = 48
 N_WING_BOTTOM_FRONT = 48
-N_WING_BOTTOM_BACK = 80
-N_TRANSITION = 12
+N_WING_BOTTOM_BACK = 32
+N_TRANSITION = 10
 
 #  Discratization parameters
 
@@ -565,35 +566,174 @@ tc_dict[4] = transfinite_curve(pt_dict, ln_dict[4], N_TRANSITION, 1.45)
 
 
 b_dict[1] = make_bblock_from_tc(1, tc_dict, 63, -81, -62, 58)
-b_dict[2] = make_bblock_from_tc(2, tc_dict,56, 85, 87, -62)
+b_dict[2] = make_bblock_from_tc(2, tc_dict, -56, 62, -87,-85)
+
+
+b_dict[2].set_boundary(ge.BoundaryId.BoundaryWest, None)
+b_dict[2].set_boundary(ge.BoundaryId.BoundaryWest, mb.BoundaryBlock("1", ge.BoundaryId.BoundarySouth))
+b_dict[1].set_boundary(ge.BoundaryId.BoundarySouth, None)
+b_dict[1].set_boundary(ge.BoundaryId.BoundarySouth, mb.BoundaryBlock("2", ge.BoundaryId.BoundaryWest))
+
+
 b_dict[3] = make_bblock_from_tc(3, tc_dict,85, 86, 68, -57)
-b_dict[4] = make_bblock_from_tc(4, tc_dict,68, 25, -70, -69)
+
+b_dict[2].set_boundary(ge.BoundaryId.BoundaryEast, None)
+b_dict[2].set_boundary(ge.BoundaryId.BoundaryEast, mb.BoundaryBlock("3", ge.BoundaryId.BoundaryNorth))
+b_dict[3].set_boundary(ge.BoundaryId.BoundaryNorth, None)
+b_dict[3].set_boundary(ge.BoundaryId.BoundaryNorth, mb.BoundaryBlock("2", ge.BoundaryId.BoundaryEast))
+
+
+b_dict[4] = make_bblock_from_tc(4, tc_dict,-68, 69, 70, -25)
+
+
+b_dict[3].set_boundary(ge.BoundaryId.BoundarySouth, None)
+b_dict[3].set_boundary(ge.BoundaryId.BoundarySouth, mb.BoundaryBlock("4", ge.BoundaryId.BoundaryNorth))
+b_dict[4].set_boundary(ge.BoundaryId.BoundaryNorth, None)
+b_dict[4].set_boundary(ge.BoundaryId.BoundaryNorth, mb.BoundaryBlock("3", ge.BoundaryId.BoundarySouth))
+
+
 b_dict[5] = make_bblock_from_tc(5, tc_dict,71, 64, -20, -70)
-b_dict[6] = make_bblock_from_tc(6, tc_dict,23, -20, 13, 19)
-b_dict[7] = make_bblock_from_tc(7, tc_dict,14, 19, 22, -21)
-b_dict[8] = make_bblock_from_tc(8, tc_dict,50, -21, 44, 43)
-b_dict[9] = make_bblock_from_tc(9, tc_dict,48, 47, -49, -43)
-b_dict[10] = make_bblock_from_tc(10, tc_dict,82, -47, 78, 65)
-b_dict[11] = make_bblock_from_tc(11, tc_dict,74, 80, 66, -65)
-b_dict[12] = make_bblock_from_tc(12, tc_dict,79, -74, -77, -73)
-b_dict[13] = make_bblock_from_tc(13, tc_dict,72, 73, -59, 63)
-b_dict[14] = make_bblock_from_tc(14, tc_dict,59, -76, -51, 55)
-b_dict[15] = make_bblock_from_tc(15, tc_dict,77, -78, -46, 76)
+
+
+b_dict[4].set_boundary(ge.BoundaryId.BoundarySouth, None)
+b_dict[4].set_boundary(ge.BoundaryId.BoundarySouth, mb.BoundaryBlock("5", ge.BoundaryId.BoundaryEast))
+b_dict[5].set_boundary(ge.BoundaryId.BoundaryEast, None)
+b_dict[5].set_boundary(ge.BoundaryId.BoundaryEast, mb.BoundaryBlock("4", ge.BoundaryId.BoundarySouth))
+
+
+b_dict[6] = make_bblock_from_tc(6, tc_dict, -23, -19,  -13, +20)
+
+
+b_dict[5].set_boundary(ge.BoundaryId.BoundarySouth, None)
+b_dict[5].set_boundary(ge.BoundaryId.BoundarySouth, mb.BoundaryBlock("6", ge.BoundaryId.BoundaryEast))
+b_dict[6].set_boundary(ge.BoundaryId.BoundaryEast, None)
+b_dict[6].set_boundary(ge.BoundaryId.BoundaryEast, mb.BoundaryBlock("5", ge.BoundaryId.BoundarySouth))
+
+
+b_dict[7] = make_bblock_from_tc(7, tc_dict, 14, 19, 22, -21)
+
+
+b_dict[6].set_boundary(ge.BoundaryId.BoundaryWest, None)
+b_dict[6].set_boundary(ge.BoundaryId.BoundaryWest, mb.BoundaryBlock("7", ge.BoundaryId.BoundaryWest))
+b_dict[7].set_boundary(ge.BoundaryId.BoundaryWest, None)
+b_dict[7].set_boundary(ge.BoundaryId.BoundaryWest, mb.BoundaryBlock("6", ge.BoundaryId.BoundaryWest))
+
+
+b_dict[8] = make_bblock_from_tc(8, tc_dict,-44, -21, -50, -43)
+
+
+b_dict[7].set_boundary(ge.BoundaryId.BoundaryEast, None)
+b_dict[7].set_boundary(ge.BoundaryId.BoundaryEast, mb.BoundaryBlock("8", ge.BoundaryId.BoundaryWest))
+b_dict[8].set_boundary(ge.BoundaryId.BoundaryWest, None)
+b_dict[8].set_boundary(ge.BoundaryId.BoundaryWest, mb.BoundaryBlock("7", ge.BoundaryId.BoundaryEast))
+
+
+b_dict[9] = make_bblock_from_tc(9, tc_dict,49, -47, -48, -43)
+
+
+b_dict[8].set_boundary(ge.BoundaryId.BoundaryEast, None)
+b_dict[8].set_boundary(ge.BoundaryId.BoundaryEast, mb.BoundaryBlock("9", ge.BoundaryId.BoundaryEast))
+b_dict[9].set_boundary(ge.BoundaryId.BoundaryEast, None)
+b_dict[9].set_boundary(ge.BoundaryId.BoundaryEast, mb.BoundaryBlock("8", ge.BoundaryId.BoundaryEast))
+
+
+b_dict[10] = make_bblock_from_tc(10, tc_dict,-78, 47, -82, -65)
+
+
+b_dict[9].set_boundary(ge.BoundaryId.BoundaryWest, None)
+b_dict[9].set_boundary(ge.BoundaryId.BoundaryWest, mb.BoundaryBlock("10", ge.BoundaryId.BoundaryWest))
+b_dict[10].set_boundary(ge.BoundaryId.BoundaryWest, None)
+b_dict[10].set_boundary(ge.BoundaryId.BoundaryWest, mb.BoundaryBlock("9", ge.BoundaryId.BoundaryWest))
+
+
+b_dict[11] = make_bblock_from_tc(11, tc_dict, -66, -80, -74, 65)
+
+
+b_dict[10].set_boundary(ge.BoundaryId.BoundaryEast, None)
+b_dict[10].set_boundary(ge.BoundaryId.BoundaryEast, mb.BoundaryBlock("11", ge.BoundaryId.BoundaryEast))
+b_dict[11].set_boundary(ge.BoundaryId.BoundaryEast, None)
+b_dict[11].set_boundary(ge.BoundaryId.BoundaryEast, mb.BoundaryBlock("10", ge.BoundaryId.BoundaryEast))
+
+
+b_dict[12] = make_bblock_from_tc(12, tc_dict,77, -74, -79, 73)
+
+
+b_dict[11].set_boundary(ge.BoundaryId.BoundarySouth, None)
+b_dict[11].set_boundary(ge.BoundaryId.BoundarySouth, mb.BoundaryBlock("12", ge.BoundaryId.BoundaryWest))
+b_dict[12].set_boundary(ge.BoundaryId.BoundaryWest, None)
+b_dict[12].set_boundary(ge.BoundaryId.BoundaryWest, mb.BoundaryBlock("11", ge.BoundaryId.BoundarySouth))
+
+
+b_dict[13] = make_bblock_from_tc(13, tc_dict,-72, -63, +59, -73)
+
+
+b_dict[12].set_boundary(ge.BoundaryId.BoundaryEast, None)
+b_dict[12].set_boundary(ge.BoundaryId.BoundaryEast, mb.BoundaryBlock("13", ge.BoundaryId.BoundaryEast))
+b_dict[13].set_boundary(ge.BoundaryId.BoundaryEast, None)
+b_dict[13].set_boundary(ge.BoundaryId.BoundaryEast, mb.BoundaryBlock("12", ge.BoundaryId.BoundaryEast))
+
+
+b_dict[13].set_boundary(ge.BoundaryId.BoundaryWest, None)
+b_dict[13].set_boundary(ge.BoundaryId.BoundaryWest, mb.BoundaryBlock("1", ge.BoundaryId.BoundaryNorth))
+b_dict[1].set_boundary(ge.BoundaryId.BoundaryNorth, None)
+b_dict[1].set_boundary(ge.BoundaryId.BoundaryNorth, mb.BoundaryBlock("13", ge.BoundaryId.BoundaryWest))
+
+
+b_dict[14] = make_bblock_from_tc(14, tc_dict,-59, -55, 51, 76)
+b_dict[15] = make_bblock_from_tc(15, tc_dict,-77, -76, 46, 78)
 b_dict[16] = make_bblock_from_tc(16, tc_dict,55, -58, -54, 53)
 b_dict[17] = make_bblock_from_tc(17, tc_dict,56, -84, -52, 54)
 b_dict[18] = make_bblock_from_tc(18, tc_dict,57, -17, -33, 84)
 b_dict[19] = make_bblock_from_tc(19, tc_dict,25, 13, 6, -11)
-b_dict[20] = make_bblock_from_tc(20, tc_dict,14, -5, -12, 26)
-b_dict[21] = make_bblock_from_tc(21, tc_dict,24, 12, -4, -10)
-b_dict[22] = make_bblock_from_tc(22, tc_dict,42, -44, -26, 35)
-b_dict[23] = make_bblock_from_tc(23, tc_dict,40, -34, 24, 35)
-b_dict[24] = make_bblock_from_tc(24, tc_dict,33, 34, 36, 83)
-b_dict[25] = make_bblock_from_tc(25, tc_dict,83, -52, -31, -37)
-b_dict[26] = make_bblock_from_tc(26, tc_dict,38, 32, -53, -31)
-b_dict[27] = make_bblock_from_tc(27, tc_dict,51, -45, -39, 32)
-b_dict[28] = make_bblock_from_tc(28, tc_dict,46, -48, -42, 45)
-b_dict[29] = make_bblock_from_tc(29, tc_dict,10, -3, -11, -17)
 
+b_dict[20] = make_bblock_from_tc(20, tc_dict,-14, -26, 12, 5)
+# b_dict[20] = make_bblock_from_tc(20, tc_dict,14, -5, -12, 26)
+
+b_dict[21] = make_bblock_from_tc(21, tc_dict,-24, 10, 4, -12)
+# b_dict[21] = make_bblock_from_tc(21, tc_dict,24, 12, -4, -10)
+b_dict[22] = make_bblock_from_tc(22, tc_dict,-42,-35, 26, 44)
+
+b_dict[23] = make_bblock_from_tc(23, tc_dict,40, -34, 24, 35)
+# b_dict[23] = make_bblock_from_tc(23, tc_dict,-40, -35, -24, 34)
+b_dict[24] = make_bblock_from_tc(24, tc_dict,33, 34, 36, 83)
+
+b_dict[25] = make_bblock_from_tc(25, tc_dict,-83, 37, 31, 52)
+b_dict[26] = make_bblock_from_tc(26, tc_dict,38, 32, -53, -31)
+b_dict[27] = make_bblock_from_tc(27, tc_dict,-51, -32, 39, 45)
+
+b_dict[28] = make_bblock_from_tc(28, tc_dict,-46, -45, 42, 48)
+b_dict[29] = make_bblock_from_tc(29, tc_dict,-10, 17, 11, 3)
+# b_dict[29] = make_bblock_from_tc(29, tc_dict,10, -3, -11, -17)
+
+
+def have_common_points(bnd1: mb.BoundaryCurve, bnd2: mb.BoundaryCurve) -> bool:
+    p11 = (bnd1.x[0], bnd1.y[0])
+    p12 = (bnd1.x[-1], bnd1.y[-1])
+    p21 = (bnd2.x[0], bnd2.y[0])
+    p22 = (bnd2.x[-1], bnd2.y[-1])
+    return (np.allclose(p11, p21) and np.allclose(p12, p22)) or (np.allclose(p11, p22) and np.allclose(p12, p21))
+
+skip = [19, 20, 21, 23, 24, 25, 26, 27, 28, 29]
+
+for bname1 in b_dict:
+    b1 = b_dict[bname1]
+    for bid1 in b1.boundaries:
+        bnd1 = b1.boundaries[bid1]
+        if type(bnd1) == mb.BoundaryCurve:
+            bnd1: mb.BoundaryCurve
+            for bname2 in b_dict:
+                if bname1 == bname2:
+                    continue
+                b2 = b_dict[bname2]
+                for bid2 in b2.boundaries:
+                    bnd2 = b2.boundaries[bid2]
+                    if type(bnd2) == mb.BoundaryCurve:
+                        bnd2: mb.BoundaryCurve
+                        if have_common_points(bnd1, bnd2):
+                            if bname1 not in skip:
+                                b1.boundaries[bid1] = mb.BoundaryBlock(f"{bname2}", bid2)
+                            if bname2 not in skip:
+                                b2.boundaries[bid2] = mb.BoundaryBlock(f"{bname1}", bid1)
 
 m, rx, ry = mb.create_elliptical_mesh([b for b in b_dict.values()], verbose=True)
 
@@ -601,9 +741,36 @@ x = m.x
 y = m.y
 ln = m.lines
 ncols = len(m.block_names)
-cmap = plt.colormaps.get_cmap("plasma")
+cmap = plt.colormaps.get_cmap("jet")
+#show_list = [str(j) for j in np.arange(22, 28) + 1]
+xn = np.zeros(len(pt_dict))
+yn = np.zeros(len(pt_dict))
+
+for i, p in enumerate(pt_dict):
+    pt = pt_dict[p]
+    xn[i] = pt.x
+    yn[i] = pt.y
+
+plt.gca().set_aspect("equal")
+plt.scatter(xn, yn)
 i = 0
+
+for bname1 in m.block_names:
+    neighbors = []
+    lines1 = np.abs(m.block_lines(bname1))
+    for bname2 in m.block_names:
+        if bname1 == bname2:
+            continue
+        lines2 = np.abs(m.block_lines(bname2))
+        l12 = np.unique(np.concatenate((lines1, lines2)))
+        if l12.shape[0] != lines1.shape[0] + lines2.shape[0]:
+            neighbors.append(bname2)
+    print(f"Block {bname1} has {len(neighbors)} neighbors: {neighbors}")
+
 for bname in m.block_names:
+    # plt.scatter(xn, yn)
+    # if bname not in show_list:
+    #     continue
     line_indices = np.abs(m.block_lines(bname)) - 1
     block_lines = ln[line_indices]
     xb = x[block_lines[:, 0]]
@@ -613,8 +780,10 @@ for bname in m.block_names:
     rb = np.stack((xb, yb), axis=1)
     re = np.stack((xe, ye), axis=1)
     lnvals = np.stack((rb, re), axis=1)
-    plt.gca().add_collection(col.LineCollection(lnvals, color=cmap(i/(ncols-1)), label=bname))
+    plt.gca().add_collection(col.LineCollection(lnvals, color=cmap((i/ncols)), label=bname))
     i+=1
+    # plt.legend()
+    # plt.show()
 
 plt.legend()
 # lnvals = []
@@ -633,16 +802,6 @@ plt.legend()
 # plt.scatter(x, y)
 #     plt.plot((x[ln[i, 0]], x[ln[i, 1]]), (y[ln[i, 0]], y[ln[i, 1]]), color="black", linestyle="dashed")
 
-plt.gca().set_aspect("equal")
-
-xn = np.zeros(len(pt_dict))
-yn = np.zeros(len(pt_dict))
-
-for i, p in enumerate(pt_dict):
-    pt = pt_dict[p]
-    xn[i] = pt.x
-    yn[i] = pt.y
-plt.scatter(xn, yn)
 plt.show()
 
 # xn = np.zeros(len(pt_dict))
