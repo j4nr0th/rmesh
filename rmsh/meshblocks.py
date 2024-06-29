@@ -72,13 +72,21 @@ class Mesh2D:
         sidx = self._internal.s
         return np.reshape(sidx, (-1, 4))
 
-    def block_lines(self, id) -> np.ndarray:
-        a = self._internal.blines(self._block_name_map[id])
+    def block_lines(self, block_id: str) -> np.ndarray:
+        a = self._internal.blines(self._block_name_map[block_id])
         return a
 
     @property
     def block_names(self) -> list[str]:
         return [s for s in self._block_name_map.keys()]
+
+    def block_boundary_lines(self, block_id: str, boundary: BoundaryId) -> np.ndarray:
+        a = self._internal.boundary_lines(self._block_name_map[block_id], boundary.value)
+        return a
+
+    def block_boundary_points(self, block_id: str, boundary: BoundaryId) -> np.ndarray:
+        a = self._internal.boundary_pts(self._block_name_map[block_id], boundary.value)
+        return a
 
 
 def _find_boundary_size(bnd: BoundaryBlock, blcks: dict[str, tuple[int, MeshBlock]]):

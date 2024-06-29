@@ -3,7 +3,7 @@
 //
 #define PY_SSIZE_CLEAN
 #include <Python.h>
-#define PY_ARRAY_UNIQUE_SYMBOL _rmsh
+#define PY_ARRAY_UNIQUE_SYMBOL _rmshAPI
 #include <numpy/npy_no_deprecated_api.h>
 #include <numpy/ndarrayobject.h>
 
@@ -32,7 +32,19 @@ static PyObject* mesh_getx(PyObject* self, void* unused)
         Py_RETURN_NONE;
     }
     npy_intp dims = this->data.n_points;
-    return PyArray_SimpleNewFromData(1, &dims, NPY_DOUBLE, this->data.p_x);
+
+    PyArrayObject* arr = (PyArrayObject*)PyArray_SimpleNewFromData(1, &dims, NPY_DOUBLE, this->data.p_x);
+    if (arr)
+    {
+        Py_INCREF(self);
+        if (PyArray_SetBaseObject(arr, self) != 0)
+        {
+            Py_DECREF(self);
+            Py_DECREF(arr);
+            arr = NULL;
+        }
+    }
+    return (PyObject*)arr;
 }
 
 static PyObject* mesh_gety(PyObject* self, void* unused)
@@ -44,7 +56,19 @@ static PyObject* mesh_gety(PyObject* self, void* unused)
         Py_RETURN_NONE;
     }
     npy_intp dims = this->data.n_points;
-    return PyArray_SimpleNewFromData(1, &dims, NPY_DOUBLE, this->data.p_y);
+
+    PyArrayObject* arr = (PyArrayObject*)PyArray_SimpleNewFromData(1, &dims, NPY_DOUBLE, this->data.p_y);
+    if (arr)
+    {
+        Py_INCREF(self);
+        if (PyArray_SetBaseObject(arr, self) != 0)
+        {
+            Py_DECREF(self);
+            Py_DECREF(arr);
+            arr = NULL;
+        }
+    }
+    return (PyObject*)arr;
 }
 
 static PyObject* mesh_getl(PyObject* self, void* unused)
@@ -56,7 +80,19 @@ static PyObject* mesh_getl(PyObject* self, void* unused)
         Py_RETURN_NONE;
     }
     npy_intp dims = 2 * this->data.n_lines;
-    return PyArray_SimpleNewFromData(1, &dims, NPY_INT32, this->data.p_lines);
+
+    PyArrayObject* arr = (PyArrayObject*)PyArray_SimpleNewFromData(1, &dims, NPY_INT32, this->data.p_lines);
+    if (arr)
+    {
+        Py_INCREF(self);
+        if (PyArray_SetBaseObject(arr, self) != 0)
+        {
+            Py_DECREF(self);
+            Py_DECREF(arr);
+            arr = NULL;
+        }
+    }
+    return (PyObject*)arr;
 }
 
 static PyObject* mesh_gets(PyObject* self, void* unused)
@@ -68,7 +104,19 @@ static PyObject* mesh_gets(PyObject* self, void* unused)
         Py_RETURN_NONE;
     }
     npy_intp dims = 4 * this->data.n_surfaces;
-    return PyArray_SimpleNewFromData(1, &dims, NPY_INT32, this->data.p_surfaces);
+
+    PyArrayObject* arr = (PyArrayObject*)PyArray_SimpleNewFromData(1, &dims, NPY_INT32, this->data.p_surfaces);
+    if (arr)
+    {
+        Py_INCREF(self);
+        if (PyArray_SetBaseObject(arr, self) != 0)
+        {
+            Py_DECREF(self);
+            Py_DECREF(arr);
+            arr = NULL;
+        }
+    }
+    return (PyObject*)arr;
 }
 
 static PyObject* mesh_block_lines(PyObject* self, PyObject* v)
@@ -89,7 +137,120 @@ static PyObject* mesh_block_lines(PyObject* self, PyObject* v)
     }
     npy_intp dims = (this->data.block_info[idx].n1 - 1) * this->data.block_info[idx].n2 +
         (this->data.block_info[idx].n2 - 1) * this->data.block_info[idx].n1;
-    return PyArray_SimpleNewFromData(1, &dims, NPY_INT32, this->data.block_info[idx].lines);
+
+    PyArrayObject* arr = (PyArrayObject*)PyArray_SimpleNewFromData(1, &dims, NPY_INT32, this->data.block_info[idx].lines);
+    if (arr)
+    {
+        Py_INCREF(self);
+        if (PyArray_SetBaseObject(arr, self) != 0)
+        {
+            Py_DECREF(self);
+            Py_DECREF(arr);
+            arr = NULL;
+        }
+    }
+    return (PyObject*)arr;
+}
+
+static PyObject* mesh_boundary_lines(PyObject* self, PyObject* v)
+{
+    unsigned block_idx, bndid;
+    if (!PyArg_ParseTuple(v, "II", &block_idx, &bndid))
+    {
+        return NULL;
+    }
+    PyMesh2dObject* this = (PyMesh2dObject*)self;
+    if (block_idx >= this->data.n_blocks)
+    {
+        return PyErr_Format(PyExc_IndexError, "Invalid index of %u was passed when the mesh only has %u blocks", block_idx, this->data.n_blocks);
+    }
+    boundary_id id;
+    switch ((boundary_id)bndid)
+    {
+    case BOUNDARY_ID_EAST:
+    case BOUNDARY_ID_WEST:
+    case BOUNDARY_ID_NORTH:
+    case BOUNDARY_ID_SOUTH:
+        id = bndid;
+        break;
+    default:
+        return PyErr_Format(PyExc_ValueError, "Boundary ID has an invalid value of %u", bndid);
+    }
+
+    const geo_id* first;
+    unsigned cnt;
+    int stride;
+    error_id res = mesh2d_get_boundary_lines_info(&this->data, block_idx, id, &first, &cnt, &stride);
+    if (res != MESH_SUCCESS)
+    {
+        return PyErr_Format(PyExc_RuntimeError, "Failed to retrieve block line info (error code %d)", res);
+    }
+    npy_intp dims = cnt;
+    npy_intp strides = sizeof(*first)*stride;
+
+    PyArrayObject* arr = (PyArrayObject*)PyArray_New(&PyArray_Type, 1, &dims, NPY_INT32, &strides, (void*)first, sizeof(*first), 0, NULL);
+    if (arr)
+    {
+        Py_INCREF(self);
+        if (PyArray_SetBaseObject(arr, self) != 0)
+        {
+            Py_DECREF(self);
+            Py_DECREF(arr);
+            arr = NULL;
+        }
+    }
+    return (PyObject*)arr;
+
+}
+
+static PyObject* mesh_boundary_points(PyObject* self, PyObject* v)
+{
+    unsigned block_idx, bndid;
+    if (!PyArg_ParseTuple(v, "II", &block_idx, &bndid))
+    {
+        return NULL;
+    }
+    PyMesh2dObject* this = (PyMesh2dObject*)self;
+    if (block_idx >= this->data.n_blocks)
+    {
+        return PyErr_Format(PyExc_IndexError, "Invalid index of %u was passed when the mesh only has %u blocks", block_idx, this->data.n_blocks);
+    }
+    boundary_id id;
+    switch ((boundary_id)bndid)
+    {
+    case BOUNDARY_ID_EAST:
+    case BOUNDARY_ID_WEST:
+    case BOUNDARY_ID_NORTH:
+    case BOUNDARY_ID_SOUTH:
+        id = bndid;
+        break;
+    default:
+        return PyErr_Format(PyExc_ValueError, "Boundary ID has an invalid value of %u", bndid);
+    }
+
+    const geo_id* first;
+    unsigned cnt;
+    int stride;
+    error_id res = mesh2d_get_boundary_points_info(&this->data, block_idx, id, &first, &cnt, &stride);
+    if (res != MESH_SUCCESS)
+    {
+        return PyErr_Format(PyExc_RuntimeError, "Failed to retrieve block line info (error code %d)", res);
+    }
+    npy_intp dims = cnt;
+    npy_intp strides = sizeof(*first)*stride;
+    PyArrayObject* arr = (PyArrayObject*)PyArray_New(&PyArray_Type, 1, &dims, NPY_INT32, &strides, (void*)first, sizeof(*first), 0, NULL);
+    if (arr)
+    {
+        Py_INCREF(self);
+        if (PyArray_SetBaseObject(arr, self) != 0)
+        {
+            Py_DECREF(self);
+            Py_DECREF(arr);
+            arr = NULL;
+        }
+    }
+    return (PyObject*)arr;
+
 }
 
 static PyGetSetDef mesh_getset[] =
@@ -104,6 +265,8 @@ static PyGetSetDef mesh_getset[] =
 static PyMethodDef mesh_methods[] =
     {
         {.ml_name = "blines", .ml_meth = mesh_block_lines, .ml_flags = METH_O, .ml_doc = "retrieves indices of lines which are in a block with the given index"},
+        {.ml_name = "boundary_lines", .ml_meth = mesh_boundary_lines, .ml_flags = METH_VARARGS, .ml_doc = "Retrieves line indices for a specified boundary of a block"},
+        {.ml_name = "boundary_pts", .ml_meth = mesh_boundary_points, .ml_flags = METH_VARARGS, .ml_doc = "Retrieves point indices for a specified boundary of a block"},
         {NULL}  //  Sentinel
     };
 
@@ -246,16 +409,16 @@ static PyObject* rmsh_create_mesh_function(PyObject* self, PyObject* args)
                 b.target = target;
                 switch (target_id)
                 {
-                case 1:
+                case BOUNDARY_ID_NORTH:
                     b.target_id = BOUNDARY_ID_NORTH;
                     break;
-                case 2:
+                case BOUNDARY_ID_SOUTH:
                     b.target_id = BOUNDARY_ID_SOUTH;
                     break;
-                case 3:
+                case BOUNDARY_ID_EAST:
                     b.target_id = BOUNDARY_ID_EAST;
                     break;
-                case 4:
+                case BOUNDARY_ID_WEST:
                     b.target_id = BOUNDARY_ID_WEST;
                     break;
                 default:

@@ -93,19 +93,6 @@ def make_bblock_from_tc(id: int, tc_dict: dict[int, mb.BoundaryCurve], north: in
     if east < 0:
         b4 = mb.BoundaryCurve(np.flip(b4.x), np.flip(b4.y))
 
-    print(b1.x[0], b1.y[0])
-    print(b1.x[-1], b1.y[-1])
-
-    print(b2.x[0], b2.y[0])
-    print(b2.x[-1], b2.y[-1])
-
-    print(b3.x[0], b3.y[0])
-    print(b3.x[-1], b3.y[-1])
-
-    print(b4.x[0], b4.y[0])
-    print(b4.x[-1], b4.y[-1])
-
-
     return mb.MeshBlock(f"{id}",
                         {
                             ge.BoundaryId.BoundaryNorth: b1,
@@ -768,9 +755,6 @@ for bname1 in m.block_names:
     print(f"Block {bname1} has {len(neighbors)} neighbors: {neighbors}")
 
 for bname in m.block_names:
-    # plt.scatter(xn, yn)
-    # if bname not in show_list:
-    #     continue
     line_indices = np.abs(m.block_lines(bname)) - 1
     block_lines = ln[line_indices]
     xb = x[block_lines[:, 0]]
@@ -781,46 +765,29 @@ for bname in m.block_names:
     re = np.stack((xe, ye), axis=1)
     lnvals = np.stack((rb, re), axis=1)
     plt.gca().add_collection(col.LineCollection(lnvals, color=cmap((i/ncols)), label=bname))
-    i+=1
-    # plt.legend()
-    # plt.show()
+    i += 1
+
+bname = m.block_names[0]
+
+north_node_indices = m.block_boundary_points(bname, mb.BoundaryId.BoundaryNorth)
+nnorth = len(north_node_indices)
+south_node_indices = m.block_boundary_points(bname, mb.BoundaryId.BoundarySouth)
+nsouth = len(south_node_indices)
+east_node_indices = m.block_boundary_points(bname, mb.BoundaryId.BoundaryEast)
+neast = len(east_node_indices)
+west_node_indices = m.block_boundary_points(bname, mb.BoundaryId.BoundaryWest)
+nwest = len(west_node_indices)
+cmap = plt.colormaps.get_cmap("magma")
+
+for i, idx in enumerate(north_node_indices):
+    plt.scatter(x[idx], y[idx], color=cmap(i/(nnorth-1)))
+for i, idx in enumerate(south_node_indices):
+    plt.scatter(x[idx], y[idx], color=cmap(i/(nsouth-1)))
+for i, idx in enumerate(east_node_indices):
+    plt.scatter(x[idx], y[idx], color=cmap(i/(neast-1)))
+for i, idx in enumerate(west_node_indices):
+    plt.scatter(x[idx], y[idx], color=cmap(i/(nwest-1)))
 
 plt.legend()
-# lnvals = []
-# xb = x[ln[:, 0]]
-# yb = y[ln[:, 0]]
-# xe = x[ln[:, 1]]
-# ye = y[ln[:, 1]]
-#
-# rb = np.stack((xb, yb), axis=1)
-# re = np.stack((xe, ye), axis=1)
-# # for i in range(ln.shape[0]):
-# #     lnvals.append((rb[i, :], re[i, :]))#[(xb[i], yb[i]), (xe[i], ye[i])])
-# lnvals = np.stack((rb, re), axis=1)
-#
-# plt.gca().add_collection(col.LineCollection(lnvals, linestyle="dashed", color="black"))
-# plt.scatter(x, y)
-#     plt.plot((x[ln[i, 0]], x[ln[i, 1]]), (y[ln[i, 0]], y[ln[i, 1]]), color="black", linestyle="dashed")
 
 plt.show()
-
-# xn = np.zeros(len(pt_dict))
-# yn = np.zeros(len(pt_dict))
-
-# for i, p in enumerate(pt_dict):
-#     pt = pt_dict[p]
-#     xn[i] = pt.x
-#     yn[i] = pt.y
-
-# ln_plot = []
-# for ln in ln_dict:
-#     line = ln_dict[ln]
-#     xl, yl = discretize(pt_dict, line, 50, 1.0)
-#     coords = np.stack((xl, yl), axis=1)
-#     ln_plot.append(coords)
-
-# plt.gca().add_collection(LineCollection(ln_plot))
-
-# plt.scatter(xn, yn)
-# plt.gca().set_aspect("equal")
-# plt.show()

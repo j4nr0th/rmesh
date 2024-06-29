@@ -1139,3 +1139,72 @@ void mesh_destroy(mesh2d* mesh, allocator* allocator)
     }
     allocator->free(allocator, mesh->block_info);
 }
+
+error_id mesh2d_get_boundary_lines_info(
+    const mesh2d* mesh, unsigned block, boundary_id boundary,
+    const geo_id** p_first, unsigned* p_count, int* p_stride)
+{
+    if (block >= mesh->n_blocks)
+    {
+        return MESH_INDEX_OUT_OF_BOUNDS;
+    }
+    unsigned cnt;
+    const block_info* const info = mesh->block_info + block;
+    switch (boundary)
+    {
+    case BOUNDARY_ID_EAST:
+    case BOUNDARY_ID_WEST:
+        cnt = info->n1 - 1;
+        break;
+    case BOUNDARY_ID_NORTH:
+    case BOUNDARY_ID_SOUTH:
+        cnt = info->n2 - 1;
+        break;
+    default:
+        return MESH_INVALID_BOUNDARY_ID;
+    }
+    int first_boundary_index = (int)line_boundary_index(info, boundary, 0);
+    int second_boundary_index = (int)line_boundary_index(info, boundary, 1);
+    *p_first = info->lines + first_boundary_index;
+    *p_stride = second_boundary_index - first_boundary_index;
+    *p_count = cnt;
+    return MESH_SUCCESS;
+}
+
+error_id mesh2d_get_boundary_points_info(
+    const mesh2d* mesh, unsigned block, boundary_id boundary, const geo_id** p_first, unsigned* p_count, int* p_stride)
+{
+    if (block >= mesh->n_blocks)
+    {
+        return MESH_INDEX_OUT_OF_BOUNDS;
+    }
+    unsigned cnt;
+    const block_info* const info = mesh->block_info + block;
+    switch (boundary)
+    {
+    case BOUNDARY_ID_EAST:
+        cnt = info->n1;
+        *p_first = info->points + (info->n2 - 1);
+        *p_stride = +info->n2;
+        break;
+    case BOUNDARY_ID_WEST:
+        cnt = info->n1;
+        *p_first = info->points + (info->n2 * (info->n1 - 1));
+        *p_stride = -info->n2;
+        break;
+    case BOUNDARY_ID_NORTH:
+        cnt = info->n2;
+        *p_first = info->points + ((info->n2) * (info->n1) - 1);
+        *p_stride = -1;
+        break;
+    case BOUNDARY_ID_SOUTH:
+        cnt = info->n2;
+        *p_first = info->points + 0;
+        *p_stride = +1;
+        break;
+    default:
+        return MESH_INVALID_BOUNDARY_ID;
+    }
+    *p_count = cnt;
+    return MESH_SUCCESS;
+}

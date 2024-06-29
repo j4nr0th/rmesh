@@ -29,9 +29,9 @@ class Surface:
 @unique
 class BoundaryId(Enum):
     BoundaryNorth = 1
-    BoundarySouth = 2
-    BoundaryEast = 3
-    BoundaryWest = 4
+    BoundaryEast = 2
+    BoundaryWest = 3
+    BoundarySouth = 4
 
 
 @dataclass(frozen=True)

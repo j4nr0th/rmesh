@@ -90,6 +90,15 @@ error_id mesh2d_create_elliptical(unsigned n_blocks, const mesh2d_block* blocks,
 
 void mesh_destroy(mesh2d* mesh, allocator* allocator);
 
+error_id mesh2d_get_boundary_lines_info(
+    const mesh2d* mesh, unsigned block, boundary_id boundary,
+    const geo_id** p_first, unsigned* p_count, int* p_stride);
+
+error_id mesh2d_get_boundary_points_info(
+    const mesh2d* mesh, unsigned block, boundary_id boundary,
+    const geo_id** p_first, unsigned* p_count, int* p_stride);
+
+
 
 
 #endif //MESH_MESH_H
