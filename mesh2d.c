@@ -400,12 +400,15 @@ static inline void set_neighboring_block(block_info* bi, boundary_id id, int blo
     }
 }
 
-static error_id generate_mesh2d_from_geometry(unsigned n_blocks, const mesh2d_block* blocks, mesh2d* p_out, allocator* allocator, const mesh_geo_args args, const solver_config* cfg, double* rx, double* ry)
+static error_id generate_mesh2d_from_geometry(unsigned n_blocks, const mesh2d_block* blocks, mesh2d* p_out, allocator* allocator, const mesh_geo_args args)
 {
     //  Remove duplicate points by averaging over them
     block_info* info = args.info;
     unsigned unique_pts = 0;
     unsigned* division_factor = allocator->alloc(allocator, args.point_cnt * sizeof*division_factor);
+#ifndef _NDEBUG
+    memset(division_factor, 0, sizeof*division_factor * args.point_cnt);
+#endif
     double* newx = allocator->alloc(allocator, args.point_cnt * sizeof*newx);
     double* newy = allocator->alloc(allocator, args.point_cnt * sizeof*newy);
     line* line_array = allocator->alloc(allocator, args.max_lines * sizeof(*line_array));
@@ -420,7 +423,7 @@ static error_id generate_mesh2d_from_geometry(unsigned n_blocks, const mesh2d_bl
         allocator->free(allocator, division_factor);
         return MESH_ALLOCATION_FAILED;
     }
-
+    
     for (unsigned i = 0; i < n_blocks; ++i)
     {
         block_info* bi = info + i;
@@ -589,10 +592,12 @@ static error_id generate_mesh2d_from_geometry(unsigned n_blocks, const mesh2d_bl
                 line_count += 1;
             }
         }
+#ifndef _NDEBUG
         for (unsigned j = 0; j < (bi->n2 - 1) * bi->n1 + bi->n2 * (bi->n1 - 1); ++j)
         {
-            assert(bi->lines[i] != 0);
+            assert(bi->lines[j] != 0);
         }
+#endif
         bi->last_ln = line_count;
     }
     line_count -= 1;
@@ -658,7 +663,7 @@ static inline error_id check_boundary_consistency(const mesh2d_block* blocks, co
     {
         return MESH_BOUNDARY_POINT_COUNT_MISMATCH;
     }
-    if (other->type == BOUNDARY_TYPE_CURVE && bnd->target >= idx)
+    if (other->type == BOUNDARY_TYPE_CURVE && (unsigned)bnd->target >= idx)
     {
         return MESH_BOUNDARY_UNSORTED;
     }
@@ -1079,7 +1084,9 @@ error_id mesh2d_create_elliptical(unsigned n_blocks, const mesh2d_block* blocks,
         }
     }
 
+    printf("Ptr value on line %u is %p\n", __LINE__, xnodal);
     res = solve_the_system_of_equations(point_cnt, system_matrix, xrhs, yrhs, xnodal, ynodal, allocator, &allocator_callbacks, cfg, rx, ry);
+    printf("Ptr value on line %u is %p\n", __LINE__, xnodal);
     if (res != JMTX_RESULT_SUCCESS && res != JMTX_RESULT_NOT_CONVERGED)
     {
         ret = MESH_SOLVER_FAILED;
@@ -1107,7 +1114,8 @@ cleanup_matrix:
             .xnodal = xnodal,
             .ynodal = ynodal,
             .info = info,
-        }, cfg, rx, ry);
+        });//, cfg, rx, ry);
+
     if (ret != MESH_SUCCESS)
     {
         for (unsigned i = 0; i < n_blocks; ++i)

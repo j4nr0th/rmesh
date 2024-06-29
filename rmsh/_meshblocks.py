@@ -1,9 +1,8 @@
-from .geometry import BoundaryBlock, BoundaryCurve, BoundaryId
+from ._geometry import BoundaryBlock, BoundaryCurve, BoundaryId
 import numpy as np
 from dataclasses import dataclass
 from typing import Sequence
-from rmsh._rmsh import create_elliptical_mesh as _cem
-
+from ._rmsh import create_elliptical_mesh as _cem
 
 @dataclass(frozen=False)
 class MeshBlock:

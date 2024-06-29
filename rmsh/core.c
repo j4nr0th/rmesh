@@ -9,7 +9,7 @@
 
 #include "../geometry.h"
 #include "../mesh2d.h"
-
+#include "../io.h"
 
 static PyObject* rmsh_info_func(PyObject* self, PyObject* args)
 {
@@ -470,6 +470,7 @@ static PyObject* rmsh_create_mesh_function(PyObject* self, PyObject* args)
             .free = wrap_free
         };
     double rx, ry;
+    mesh2d_save_args("circular.bin", n_blocks, p_blocks, &cfg);
     const error_id e = mesh2d_create_elliptical(n_blocks, p_blocks, &cfg, &a, &msh->data, &rx, &ry);
     PyMem_FREE(p_blocks);
     if (e != MESH_SUCCESS)

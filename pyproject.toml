@@ -10,3 +10,5 @@ dependencies = [
     "numpy",
     "ninja"
 ]
+[tool.scikit-build]
+cmake.build-type = "Debug"

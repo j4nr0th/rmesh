@@ -6,6 +6,22 @@
 #include "io.h"
 #include "mesh2d.h"
 
+static void* wrap_alloc(void* state, size_t sz)
+{
+    (void)state;
+    return malloc(sz);
+}
+static void* wrap_realloc(void* state, void* ptr, size_t sz)
+{
+    (void)state;
+    return realloc(ptr, sz);
+}
+static void wrap_free(void* state, void* ptr)
+{
+    (void)state;
+    free(ptr);
+}
+
 static void linespace(double x0, double x1, unsigned n, double* pout)
 {
     if (n == 1)
@@ -21,7 +37,7 @@ static void linespace(double x0, double x1, unsigned n, double* pout)
 
 int main(void)
 {
-    enum {NB1 = 8, NB2 = 7, NR = 6};
+    enum {NB1 = 2, NB2 = 2, NR = 2};
 
     double angle_right[NB1];
     double angle_left[NB1];
@@ -116,7 +132,20 @@ int main(void)
     };
 
     mesh2d m = {0};
-    error_id e = mesh2d_create_elliptical(5, blocks, &m);
+    allocator a = {.alloc = wrap_alloc, .realloc = wrap_realloc, .free = wrap_free};
+    double rx, ry;
+    solver_config cfg =
+        {
+        .direct = 0,
+        .tol = 1e-6,
+        .smoother_rounds = 0,
+        .max_iterations = 1000,
+        .max_rounds = 10,
+        .verbose = 1
+        };
+    error_id e = mesh2d_create_elliptical(5, blocks, &cfg, &a, &m, &rx, &ry);
+    printf("Error code was %u\n", e);
+
     assert(e == MESH_SUCCESS);
     if (e != MESH_SUCCESS)
     {
@@ -124,6 +153,6 @@ int main(void)
     }
     save_nodes_to_file("bigger_pts.dat", m.n_points, m.p_x, m.p_y);
     save_lines_to_file("bigger_lns.dat", m.n_lines, m.p_lines);
-    mesh_destroy(&m);
+    mesh_destroy(&m, &a);
     return 0;
 }
