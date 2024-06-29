@@ -127,26 +127,6 @@ int main(void)
     save_nodes_to_file("out1.dat", m.n_points, m.p_x, m.p_y);
     mesh_destroy(&m, &a);
 
-    unsigned nb;
-    mesh2d_block* pb;
-    int v = mesh2d_load_args("../circular.bin", &nb, &pb, &cfg);
-    assert(v == 0);
-    (void)v;
-
-    err = mesh2d_create_elliptical(nb, pb, &cfg, &a, &m, &rx, &ry);
-    assert(err == MESH_SUCCESS);
-    printf("Error code was %u\n", err);
-    free(pb[0].bnorth.curve.x);
-    free(pb[0].bnorth.curve.y);
-    free(pb[0].bsouth.curve.x);
-    free(pb[0].bsouth.curve.y);
-    free(pb[0].beast.curve.x);
-    free(pb[0].beast.curve.y);
-    free(pb[0].bwest.curve.x);
-    free(pb[0].bwest.curve.y);
-
-    free(pb);
-    mesh_destroy(&m, &a);
 
     return 0;
 }

@@ -522,14 +522,15 @@ static error_id generate_mesh2d_from_geometry(unsigned n_blocks, const mesh2d_bl
         newx[i] *= d;
         newy[i] *= d;
     }
-
+    if (unique_pts != args.point_cnt)
     {
-        double* tmp = realloc(newx, unique_pts * sizeof*newx);
+        double* tmp = allocator->realloc(allocator, newx, unique_pts * sizeof*newx);
         assert(tmp);
         newx = tmp;
     }
+    if (unique_pts != args.point_cnt)
     {
-        double* tmp = realloc(newy, unique_pts * sizeof*newy);
+        double* tmp = allocator->realloc(allocator, newy, unique_pts * sizeof*newy);
         assert(tmp);
         newy = tmp;
     }
@@ -1084,9 +1085,7 @@ error_id mesh2d_create_elliptical(unsigned n_blocks, const mesh2d_block* blocks,
         }
     }
 
-    printf("Ptr value on line %u is %p\n", __LINE__, xnodal);
     res = solve_the_system_of_equations(point_cnt, system_matrix, xrhs, yrhs, xnodal, ynodal, allocator, &allocator_callbacks, cfg, rx, ry);
-    printf("Ptr value on line %u is %p\n", __LINE__, xnodal);
     if (res != JMTX_RESULT_SUCCESS && res != JMTX_RESULT_NOT_CONVERGED)
     {
         ret = MESH_SOLVER_FAILED;
