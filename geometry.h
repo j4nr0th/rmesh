@@ -17,6 +17,8 @@ enum boundary_type_enum
     BOUNDARY_TYPE_BLOCK = 2,
 };
 typedef enum boundary_type_enum boundary_type;
+const char* boundary_type_to_str(boundary_type type);
+
 
 enum boundary_id_enum
 {
@@ -26,6 +28,7 @@ enum boundary_id_enum
     BOUNDARY_ID_SOUTH = 4,
 };
 typedef enum boundary_id_enum boundary_id;
+const char* boundary_id_to_str(boundary_id id);
 
 
 struct boundary_curve_struct

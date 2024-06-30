@@ -368,7 +368,6 @@ static inline void deal_with_line_boundary(const boundary_block* boundary, const
     }
 }
 
-
 typedef struct mesh2d_geo_args_struct mesh_geo_args;
 struct mesh2d_geo_args_struct
 {
@@ -381,7 +380,71 @@ struct mesh2d_geo_args_struct
     block_info* info;
 };
 
-static inline void set_neighboring_block(block_info* bi, boundary_id id, int block_idx)
+
+static inline void deal_with_point_boundary(const unsigned i, const boundary_block* boundary, const block_info* info_owner,
+    const block_info* info_target, double* newx, double* newy, unsigned* division_factor, const mesh_geo_args* args)
+{
+    for (unsigned j = 0; j < boundary->n; ++j)
+    {
+        unsigned other_idx = info_target->points[point_boundary_index_flipped(info_target, (boundary->target_id), j)];
+        unsigned this_idx = point_boundary_index(info_owner, boundary->owner_id, j);
+        newx[other_idx] += args->xnodal[this_idx + args->block_offsets[i]];
+        newy[other_idx] += args->ynodal[this_idx + args->block_offsets[i]];
+        info_owner->points[this_idx] = other_idx;
+        division_factor[other_idx] += 1;
+    }
+}
+
+static inline boundary_id get_target_boundary(const block_info* target_info, geo_id block)
+{
+    if (target_info->neighboring_block_idx.north == block)
+    {
+        return BOUNDARY_ID_NORTH;
+    }
+
+    if (target_info->neighboring_block_idx.south == block)
+    {
+        return BOUNDARY_ID_SOUTH;
+    }
+
+    if (target_info->neighboring_block_idx.east == block)
+    {
+        return BOUNDARY_ID_EAST;
+    }
+
+    if (target_info->neighboring_block_idx.west == block)
+    {
+        return BOUNDARY_ID_WEST;
+    }
+    return 0;
+}
+
+
+/**
+ * Checks if the curve boundaries represent the same curve and should thus be merged
+ * @param b1 first boundary
+ * @param b2 second boundary
+ * @return nonzero if the two boundary curves match and are indeed representing the same curve
+ */
+static inline int are_curve_boundaries_the_same(const boundary_curve* b1, const boundary_curve* b2)
+{
+    if (b1->n != b2->n)
+    {
+        return 0;
+    }
+    const unsigned n = b1->n;
+    for (unsigned i = 0; i < n; ++i)
+    {
+        if (b1->x[i] != b2->x[n - 1 - i] || b1->y[i] != b2->y[n - 1 - i])
+        {
+            return 0;
+        }
+    }
+    return 1;
+}
+
+
+static inline void set_neighboring_block(block_info* bi, boundary_id id, geo_id block_idx)
 {
     switch (id)
     {
@@ -400,7 +463,7 @@ static inline void set_neighboring_block(block_info* bi, boundary_id id, int blo
     }
 }
 
-static error_id generate_mesh2d_from_geometry(unsigned n_blocks, const mesh2d_block* blocks, mesh2d* p_out, allocator* allocator, const mesh_geo_args args)
+static error_id generate_mesh2d_from_geometry(unsigned n_blocks, mesh2d_block* blocks, mesh2d* p_out, allocator* allocator, const mesh_geo_args args)
 {
     //  Remove duplicate points by averaging over them
     block_info* info = args.info;
@@ -422,6 +485,160 @@ static error_id generate_mesh2d_from_geometry(unsigned n_blocks, const mesh2d_bl
         allocator->free(allocator, newx);
         allocator->free(allocator, division_factor);
         return MESH_ALLOCATION_FAILED;
+    }
+    for (unsigned i = 0; i < n_blocks; ++i)
+    {
+        mesh2d_block* b = blocks + i;
+        if (b->bnorth.type == BOUNDARY_TYPE_CURVE)
+        {
+            const boundary_curve* bc = &b->bnorth.curve;
+            unsigned j;
+            boundary_id bid = 0;
+            for (j = 0; j < i; ++j)
+            {
+                const mesh2d_block* other = blocks + j;
+                if (other->bnorth.type == BOUNDARY_TYPE_CURVE && are_curve_boundaries_the_same(bc, &other->bnorth.curve))
+                {
+                    bid = BOUNDARY_ID_NORTH;
+                    break;
+                }
+                if (other->bsouth.type == BOUNDARY_TYPE_CURVE && are_curve_boundaries_the_same(bc, &other->bsouth.curve))
+                {
+                    bid = BOUNDARY_ID_SOUTH;
+                    break;
+                }
+                if (other->beast.type == BOUNDARY_TYPE_CURVE && are_curve_boundaries_the_same(bc, &other->beast.curve))
+                {
+                    bid = BOUNDARY_ID_EAST;
+                    break;
+                }
+                if (other->bwest.type == BOUNDARY_TYPE_CURVE && are_curve_boundaries_the_same(bc, &other->bwest.curve))
+                {
+                    bid = BOUNDARY_ID_WEST;
+                    break;
+                }
+            }
+            if (j != i)
+            {
+                printf("Blocks %u and %u share boundaries %s and %s\n", i, j, boundary_id_to_str(BOUNDARY_ID_NORTH), boundary_id_to_str(bid));
+                assert(bid != 0);
+                b->bnorth.type = BOUNDARY_TYPE_BLOCK;
+                b->bnorth.block = (boundary_block){.n = b->bnorth.n, .owner = i, .owner_id = BOUNDARY_ID_NORTH, .target = j, .target_id = bid};
+            }
+        }
+
+        if (b->bsouth.type == BOUNDARY_TYPE_CURVE)
+        {
+            const boundary_curve* bc = &b->bsouth.curve;
+            unsigned j;
+            boundary_id bid = 0;
+            for (j = 0; j < i; ++j)
+            {
+                const mesh2d_block* other = blocks + j;
+                if (other->bnorth.type == BOUNDARY_TYPE_CURVE && are_curve_boundaries_the_same(bc, &other->bnorth.curve))
+                {
+                    bid = BOUNDARY_ID_NORTH;
+                    break;
+                }
+                if (other->bsouth.type == BOUNDARY_TYPE_CURVE && are_curve_boundaries_the_same(bc, &other->bsouth.curve))
+                {
+                    bid = BOUNDARY_ID_SOUTH;
+                    break;
+                }
+                if (other->beast.type == BOUNDARY_TYPE_CURVE && are_curve_boundaries_the_same(bc, &other->beast.curve))
+                {
+                    bid = BOUNDARY_ID_EAST;
+                    break;
+                }
+                if (other->bwest.type == BOUNDARY_TYPE_CURVE && are_curve_boundaries_the_same(bc, &other->bwest.curve))
+                {
+                    bid = BOUNDARY_ID_WEST;
+                    break;
+                }
+            }
+            if (j != i)
+            {
+                printf("Blocks %u and %u share boundaries %s and %s\n", i, j, boundary_id_to_str(BOUNDARY_ID_SOUTH), boundary_id_to_str(bid));
+                assert(bid != 0);
+                b->bsouth.type = BOUNDARY_TYPE_BLOCK;
+                b->bsouth.block = (boundary_block){.n = b->bsouth.n, .owner = i, .owner_id = BOUNDARY_ID_SOUTH, .target = j, .target_id = bid};
+            }
+        }
+        if (b->beast.type == BOUNDARY_TYPE_CURVE)
+        {
+            const boundary_curve* bc = &b->beast.curve;
+            unsigned j;
+            boundary_id bid = 0;
+            for (j = 0; j < i; ++j)
+            {
+                const mesh2d_block* other = blocks + j;
+                if (other->bnorth.type == BOUNDARY_TYPE_CURVE && are_curve_boundaries_the_same(bc, &other->bnorth.curve))
+                {
+                    bid = BOUNDARY_ID_NORTH;
+                    break;
+                }
+                if (other->bsouth.type == BOUNDARY_TYPE_CURVE && are_curve_boundaries_the_same(bc, &other->bsouth.curve))
+                {
+                    bid = BOUNDARY_ID_SOUTH;
+                    break;
+                }
+                if (other->beast.type == BOUNDARY_TYPE_CURVE && are_curve_boundaries_the_same(bc, &other->beast.curve))
+                {
+                    bid = BOUNDARY_ID_EAST;
+                    break;
+                }
+                if (other->bwest.type == BOUNDARY_TYPE_CURVE && are_curve_boundaries_the_same(bc, &other->bwest.curve))
+                {
+                    bid = BOUNDARY_ID_WEST;
+                    break;
+                }
+            }
+            if (j != i)
+            {
+                assert(bid != 0);
+                printf("Blocks %u and %u share boundaries %s and %s\n", i, j, boundary_id_to_str(BOUNDARY_ID_EAST), boundary_id_to_str(bid));
+                b->beast.type = BOUNDARY_TYPE_BLOCK;
+                b->beast.block = (boundary_block){.n = b->beast.n, .owner = i, .owner_id = BOUNDARY_ID_EAST, .target = j, .target_id = bid};
+            }
+        }
+        if (b->bwest.type == BOUNDARY_TYPE_CURVE)
+        {
+            const boundary_curve* bc = &b->bwest.curve;
+            unsigned j;
+            boundary_id bid = 0;
+            for (j = 0; j < i; ++j)
+            {
+                const mesh2d_block* other = blocks + j;
+                if (other->bnorth.type == BOUNDARY_TYPE_CURVE && are_curve_boundaries_the_same(bc, &other->bnorth.curve))
+                {
+                    bid = BOUNDARY_ID_NORTH;
+                    break;
+                }
+                if (other->bsouth.type == BOUNDARY_TYPE_CURVE && are_curve_boundaries_the_same(bc, &other->bsouth.curve))
+                {
+                    bid = BOUNDARY_ID_SOUTH;
+                    break;
+                }
+                if (other->beast.type == BOUNDARY_TYPE_CURVE && are_curve_boundaries_the_same(bc, &other->beast.curve))
+                {
+                    bid = BOUNDARY_ID_EAST;
+                    break;
+                }
+                if (other->bwest.type == BOUNDARY_TYPE_CURVE && are_curve_boundaries_the_same(bc, &other->bwest.curve))
+                {
+                    bid = BOUNDARY_ID_WEST;
+                    break;
+                }
+            }
+            if (j != i)
+            {
+                printf("Blocks %u and %u share boundaries %s and %s\n", i, j, boundary_id_to_str(BOUNDARY_ID_WEST), boundary_id_to_str(bid));
+                assert(bid != 0);
+                b->bwest.type = BOUNDARY_TYPE_BLOCK;
+                b->bwest.block = (boundary_block){.n = b->bwest.n, .owner = i, .owner_id = BOUNDARY_ID_WEST, .target = j, .target_id = bid};
+            }
+        }
+
     }
     
     for (unsigned i = 0; i < n_blocks; ++i)
@@ -697,7 +914,7 @@ error_id mesh2d_check_blocks(unsigned n_blocks, const mesh2d_block* blocks)
     return ret;
 }
 
-error_id mesh2d_create_elliptical(unsigned n_blocks, const mesh2d_block* blocks, const solver_config* cfg, allocator* allocator, mesh2d* p_out, double* rx, double* ry)
+error_id mesh2d_create_elliptical(unsigned n_blocks, mesh2d_block* blocks, const solver_config* cfg, allocator* allocator, mesh2d* p_out, double* rx, double* ry)
 {
     jmtx_allocator_callbacks allocator_callbacks =
         {

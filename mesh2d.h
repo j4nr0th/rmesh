@@ -86,7 +86,7 @@ struct allocator_struct
 
 error_id mesh2d_check_blocks(unsigned n_blocks, const mesh2d_block* blocks);
 
-error_id mesh2d_create_elliptical(unsigned n_blocks, const mesh2d_block* blocks, const solver_config* cfg, allocator* allocator, mesh2d* p_out, double* rx, double* ry);
+error_id mesh2d_create_elliptical(unsigned n_blocks, mesh2d_block* blocks, const solver_config* cfg, allocator* allocator, mesh2d* p_out, double* rx, double* ry);
 
 void mesh_destroy(mesh2d* mesh, allocator* allocator);
 

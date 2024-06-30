@@ -8,7 +8,9 @@ set(CMAKE_C_STANDARD 99)
 find_package(Python 3.12 COMPONENTS Interpreter Development.Module REQUIRED)
 set(Python_NumPy_INCLUDE_DIRS "${CMAKE_SOURCE_DIR}/venv/lib/python3.12/site-packages/numpy/_core/include")
 
-list(APPEND MESH_FILES geometry.h
+list(APPEND MESH_FILES
+        geometry.h
+        geometry.c
         mesh2d.c
         mesh2d.h
         err.c
