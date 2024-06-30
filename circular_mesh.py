@@ -1,7 +1,7 @@
 import numpy as np
 from matplotlib import pyplot as plt
 from matplotlib.collections import LineCollection
-from rmsh.base import BoundaryCurve, MeshBlock, Mesh2D, create_elliptical_mesh, BoundaryId, BoundaryBlock
+from rmsh.base import BoundaryCurve, MeshBlock, Mesh2D, create_elliptical_mesh, BoundaryId, BoundaryBlock, SolverConfig
 
 
 def one_block_only(n1: int, n2: int) -> Mesh2D:
@@ -47,6 +47,105 @@ def self_closed_mesh(n1: int, n2: int) -> Mesh2D:
     return m
 
 
+def four_wierdly_connected_ones(n1: int, n2: int) -> Mesh2D:
+    angle_l = np.linspace(+0*np.pi/2, +1*np.pi/2, n1)
+    angle_b = np.linspace(+1*np.pi/2, +2*np.pi/2, n2)
+    angle_r = np.linspace(+2*np.pi/2, +3*np.pi/2, n1)
+    angle_t = np.linspace(+3*np.pi/2, +4*np.pi/2, n2)
+
+    cl = BoundaryCurve(np.cos(angle_l), np.sin(angle_l))
+    cr = BoundaryCurve(np.cos(angle_r), np.sin(angle_r))
+    ct = BoundaryCurve(np.cos(angle_t), np.sin(angle_t))
+    cb = BoundaryCurve(np.cos(angle_b), np.sin(angle_b))
+
+    blockwest = MeshBlock("left", {
+        BoundaryId.BoundaryWest: cl,
+        BoundaryId.BoundaryEast: BoundaryBlock("right", BoundaryId.BoundaryWest, n1),
+        BoundaryId.BoundaryNorth: BoundaryBlock("top", BoundaryId.BoundaryWest, n2),
+        BoundaryId.BoundarySouth: BoundaryBlock("bottom", BoundaryId.BoundaryWest, n2),
+    })
+    blockeast = MeshBlock("right", {
+        BoundaryId.BoundaryWest: BoundaryBlock("left", BoundaryId.BoundaryEast, n1),
+        BoundaryId.BoundaryEast: cr,
+        BoundaryId.BoundaryNorth: BoundaryBlock("top", BoundaryId.BoundaryEast, n2),
+        BoundaryId.BoundarySouth: BoundaryBlock("bottom", BoundaryId.BoundaryEast, n2),
+    })
+    blocknorth = MeshBlock("top", {
+        BoundaryId.BoundaryWest: BoundaryBlock("left", BoundaryId.BoundaryNorth, n1),
+        BoundaryId.BoundaryEast: BoundaryBlock("right", BoundaryId.BoundaryNorth, n1),
+        BoundaryId.BoundaryNorth: ct,
+        BoundaryId.BoundarySouth: BoundaryBlock("bottom", BoundaryId.BoundaryNorth, n2),
+    })
+    blocksouth = MeshBlock("bottom", {
+        BoundaryId.BoundaryWest: BoundaryBlock("left", BoundaryId.BoundarySouth, n1),
+        BoundaryId.BoundaryEast: BoundaryBlock("right", BoundaryId.BoundarySouth, n1),
+        BoundaryId.BoundaryNorth: BoundaryBlock("top", BoundaryId.BoundarySouth, n2),
+        BoundaryId.BoundarySouth: cb,
+    })
+
+    m, _, _ = create_elliptical_mesh([blockwest, blockeast, blocknorth, blocksouth], verbose=True,
+                                     solver_cfg=SolverConfig(smoother_rounds=0, max_iterations=64))
+    return m
+
+
+def as_god_intended(n1: int, n2: int, n3: int) -> Mesh2D:
+    angle_l = np.linspace(+0*np.pi/2, +1*np.pi/2, n1)
+    angle_b = np.linspace(+1*np.pi/2, +2*np.pi/2, n2)
+    angle_r = np.linspace(+2*np.pi/2, +3*np.pi/2, n1)
+    angle_t = np.linspace(+3*np.pi/2, +4*np.pi/2, n2)
+
+    cl = BoundaryCurve(np.cos(angle_l), np.sin(angle_l))
+    cr = BoundaryCurve(np.cos(angle_r), np.sin(angle_r))
+    ct = BoundaryCurve(np.cos(angle_t), np.sin(angle_t))
+    cb = BoundaryCurve(np.cos(angle_b), np.sin(angle_b))
+
+    blockwest = MeshBlock("left", {
+        BoundaryId.BoundaryWest: cl,
+        BoundaryId.BoundaryEast: BoundaryBlock("center", BoundaryId.BoundaryWest, n1),
+        BoundaryId.BoundaryNorth: BoundaryBlock("top", BoundaryId.BoundaryWest, n3),
+        BoundaryId.BoundarySouth: BoundaryBlock("bottom", BoundaryId.BoundaryWest, n3),
+    })
+    blockeast = MeshBlock("right", {
+        BoundaryId.BoundaryWest: BoundaryBlock("center", BoundaryId.BoundaryEast, n1),
+        BoundaryId.BoundaryEast: cr,
+        BoundaryId.BoundaryNorth: BoundaryBlock("top", BoundaryId.BoundaryEast, n3),
+        BoundaryId.BoundarySouth: BoundaryBlock("bottom", BoundaryId.BoundaryEast, n3),
+    })
+    blocknorth = MeshBlock("top", {
+        BoundaryId.BoundaryWest: BoundaryBlock("left", BoundaryId.BoundaryNorth, n3),
+        BoundaryId.BoundaryEast: BoundaryBlock("right", BoundaryId.BoundaryNorth, n3),
+        BoundaryId.BoundaryNorth: ct,
+        BoundaryId.BoundarySouth: BoundaryBlock("center", BoundaryId.BoundaryNorth, n2),
+    })
+    blocksouth = MeshBlock("bottom", {
+        BoundaryId.BoundaryWest: BoundaryBlock("left", BoundaryId.BoundarySouth, n3),
+        BoundaryId.BoundaryEast: BoundaryBlock("right", BoundaryId.BoundarySouth, n3),
+        BoundaryId.BoundaryNorth: BoundaryBlock("center", BoundaryId.BoundarySouth, n2),
+        BoundaryId.BoundarySouth: cb,
+    })
+    blockmiddle = MeshBlock("center", {
+        BoundaryId.BoundaryWest: BoundaryBlock("left", BoundaryId.BoundaryEast, n1),
+        BoundaryId.BoundaryEast: BoundaryBlock("right", BoundaryId.BoundaryWest, n1),
+        BoundaryId.BoundaryNorth: BoundaryBlock("top", BoundaryId.BoundarySouth, n2),
+        BoundaryId.BoundarySouth: BoundaryBlock("bottom", BoundaryId.BoundaryNorth, n2),
+    })
+
+    m, _, _ = create_elliptical_mesh([blockwest, blockeast, blocknorth, blocksouth, blockmiddle], verbose=True,
+                                     solver_cfg=SolverConfig(smoother_rounds=0, max_iterations=128, tolerance=5e-6))
+    return m
+
+
+def ungodly(n1: int, n2: int) -> Mesh2D:
+    blockmiddle = MeshBlock("center", {
+        BoundaryId.BoundaryWest: BoundaryBlock("center", BoundaryId.BoundaryEast, n1),
+        BoundaryId.BoundaryEast: BoundaryBlock("center", BoundaryId.BoundaryWest, n1),
+        BoundaryId.BoundaryNorth: BoundaryBlock("center", BoundaryId.BoundarySouth, n2),
+        BoundaryId.BoundarySouth: BoundaryBlock("center", BoundaryId.BoundaryNorth, n2),
+    })
+
+    m, _, _ = create_elliptical_mesh([blockmiddle], verbose=True,
+        solver_cfg=SolverConfig(smoother_rounds=0, max_iterations=64))
+    return m
 
 
 def plot_mesh(m: Mesh2D) -> None:
@@ -72,7 +171,13 @@ def plot_mesh(m: Mesh2D) -> None:
 
 
 if __name__ == "__main__":
-    m = one_block_only(50, 50)
+    m = one_block_only(100, 100)
     plot_mesh(m)
-    m = self_closed_mesh(5, 5)
+    m = self_closed_mesh(100, 100)
+    plot_mesh(m)
+    m = four_wierdly_connected_ones(50, 50)
+    plot_mesh(m)
+    m = as_god_intended(500, 500, 50)
+    plot_mesh(m)
+    m = ungodly(10, 10)
     plot_mesh(m)
