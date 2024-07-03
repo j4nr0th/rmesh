@@ -3,10 +3,26 @@ requires = ["scikit-build-core",
             "numpy>=2"]
 build-backend = "scikit_build_core.build"
 
+[tool.scikit-build]
+wheel.py-api = "cp310"
+wheel.license-files = ["LICENSE"]
+
 [project]
 name = "rmsh"
 dependencies=["numpy>=1.4"]
 version = "0.0.1"
-
-[tool.scikit-build]
-wheel.py-api = "cp37"
+requires-python=">=3.10"
+authors = [
+    {name="Jan Roth", email="r0th.j4n@gmail.com"}
+]
+description="Rectangular mesh generator for semi-structured elliptical meshes."
+classifiers = [
+    "Private :: Do Not Upload",
+    "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
+    "Development Status :: 2 - Pre-Alpha",
+    "Intended Audience :: Science/Research",
+    "Natural Language :: English",
+    "Programming Language :: C",
+    "Programming Language :: Python :: 3",
+    "Topic :: Scientific/Engineering :: Mathematics"
+]

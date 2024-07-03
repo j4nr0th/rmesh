@@ -8,7 +8,7 @@ endif()
 set(CMAKE_C_STANDARD 99)
 
 #   Load Python package
-find_package(Python 3.10 COMPONENTS Interpreter Development.Module REQUIRED)
+find_package(Python 3.10 COMPONENTS Interpreter Development.Module Development.SABIModule REQUIRED)
 #set(Python_NumPy_INCLUDE_DIRS "${CMAKE_SOURCE_DIR}/venv/lib/python3.12/site-packages/numpy/_core/include")
 execute_process(
         COMMAND "${Python3_EXECUTABLE}"
@@ -38,8 +38,7 @@ add_executable(bigger_test tests/bigger_test.c ${MESH_FILES})
 target_compile_options(bigger_test PRIVATE -Wall -Werror -Wextra)
 target_link_libraries(bigger_test PRIVATE jmtx)
 target_include_directories(bigger_test PRIVATE jmtx/include)
-
-python_add_library(_rmsh MODULE ${MESH_FILES} src/core.c WITH_SOABI)
+python_add_library(_rmsh MODULE ${MESH_FILES} src/core.c WITH_SOABI USE_SABI 3.10)
 target_include_directories(_rmsh PRIVATE jmtx/include ${Python_INCLUDE_DIRS} ${NumPy_INCLUDE_DIRS})
 target_link_libraries(_rmsh PRIVATE jmtx)
 
@@ -47,15 +46,4 @@ if (DEFINED SKBUILD)
     install(TARGETS _rmsh
             DESTINATION ${SKBUILD_PROJECT_NAME}
             COMPONENT PythonModule)
-
-
-    if("${CMAKE_CURRENT_SOURCE_DIR}" STREQUAL "${CMAKE_CURRENT_BINARY_DIR}"
-            AND DEFINED SKBUILD)
-        # Editable in-place builds. THe empty generator expression ensures
-        # multi-config enerators keeps us from having to set
-        # LIBRARY_OUTPUT_DIRECTORY_<CONFIG> too.
-        set_target_properties(
-                _module PROPERTIES LIBRARY_OUTPUT_DIRECTORY
-                "${CMAKE_BINARY_DIR}/src/${SKBUILD_PROJECT_NAME}$<0:>")
-    endif()
 endif()

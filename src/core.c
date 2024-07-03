@@ -1,8 +1,9 @@
 //
 // Created by jan on 22.6.2024.
 //
-
-#define PY_LIMITED_API 0x030A0000
+#ifndef PY_LIMITED_API
+    #define PY_LIMITED_API 0x030A0000
+#endif
 
 #define PY_SSIZE_CLEAN
 #include <Python.h>
@@ -349,19 +350,38 @@ static void mesh_dtor(PyObject* self)
     mesh_destroy(&this->data, &a);
 }
 
-static PyTypeObject mesh_type =
+static PyType_Slot mesh_type_slots[] =
     {
-        .ob_base = PyVarObject_HEAD_INIT(NULL, 0)
-        .tp_name = "_rmsh.mesh",
-        .tp_doc = "internal mesh interface",
-        .tp_basicsize = sizeof(PyMesh2dObject),
-        .tp_itemsize = 0,
-        .tp_flags = Py_TPFLAGS_DEFAULT|Py_TPFLAGS_IMMUTABLETYPE|Py_TPFLAGS_DISALLOW_INSTANTIATION,
-        .tp_new = PyType_GenericNew,
-        .tp_getset = mesh_getset,
-        .tp_finalize = mesh_dtor,
-        .tp_methods = mesh_methods,
+    {.slot = Py_tp_new, .pfunc = PyType_GenericNew},
+    {.slot = Py_tp_getset, .pfunc = mesh_getset},
+    {.slot = Py_tp_doc, .pfunc = "internal mesh interface"},
+    {.slot = Py_tp_finalize, .pfunc = mesh_dtor},
+    {.slot = Py_tp_methods, mesh_methods},
+    {0, NULL}  // Sentinel
     };
+
+static PyType_Spec mesh_type_spec =
+    {
+    .name = "_rmsh.mesh",
+    .basicsize = sizeof(PyMesh2dObject),
+    .itemsize = 0,
+    .flags = Py_TPFLAGS_DEFAULT|Py_TPFLAGS_IMMUTABLETYPE|Py_TPFLAGS_DISALLOW_INSTANTIATION,
+    .slots = mesh_type_slots,
+    };
+
+// static PyTypeObject mesh_type =
+//     {
+//         .ob_base = PyVarObject_HEAD_INIT(NULL, 0)
+//         .tp_name = "_rmsh.mesh",
+//         .tp_doc = "internal mesh interface",
+//         .tp_basicsize = sizeof(PyMesh2dObject),
+//         .tp_itemsize = 0,
+//         .tp_flags = Py_TPFLAGS_DEFAULT|Py_TPFLAGS_IMMUTABLETYPE|Py_TPFLAGS_DISALLOW_INSTANTIATION,
+//         .tp_new = PyType_GenericNew,
+//         .tp_getset = mesh_getset,
+//         .tp_finalize = mesh_dtor,
+//         .tp_methods = mesh_methods,
+//     };
 
 
 
@@ -369,8 +389,13 @@ static PyTypeObject mesh_type =
 //  Mesh creation function
 static PyObject* rmsh_create_mesh_function(PyObject* self, PyObject* args)
 {
-    PyListObject* input_list = NULL;
-    PyTupleObject* options = NULL;
+    PyTypeObject* mesh_type = (PyTypeObject*)PyObject_GetAttrString(self, "mesh");
+    if (!mesh_type)
+    {
+        return NULL;
+    }
+    PyObject* input_list = NULL;
+    PyObject* options = NULL;
     int b_verbose = 0;
     if (!PyArg_ParseTuple(args, "O!pO!", &PyList_Type, &input_list, &b_verbose, &PyTuple_Type, &options))
     {
@@ -390,7 +415,7 @@ static PyObject* rmsh_create_mesh_function(PyObject* self, PyObject* args)
 
 
     //  Convert to usable form
-    const unsigned n_blocks = PyList_GET_SIZE(input_list);
+    const unsigned n_blocks = PyList_Size(input_list);
     mesh2d_block* p_blocks = PyMem_MALLOC(n_blocks * sizeof*p_blocks);
     if (p_blocks == NULL)
     {
@@ -400,8 +425,8 @@ static PyObject* rmsh_create_mesh_function(PyObject* self, PyObject* args)
     for (unsigned i = 0; i < n_blocks; ++i)
     {
         const char* label = NULL;
-        PyTupleObject* bnds[4];
-        if (!PyArg_ParseTuple(PyList_GET_ITEM(input_list, i), "sO!O!O!O!", &label, &PyTuple_Type, &bnds+0, &PyTuple_Type, bnds+1,
+        PyObject* bnds[4];
+        if (!PyArg_ParseTuple(PyList_GetItem(input_list, i), "sO!O!O!O!", &label, &PyTuple_Type, &bnds+0, &PyTuple_Type, bnds+1,
                               &PyTuple_Type, bnds+2, &PyTuple_Type, bnds+3))
         {
             PyMem_FREE(p_blocks);
@@ -414,16 +439,16 @@ static PyObject* rmsh_create_mesh_function(PyObject* self, PyObject* args)
         {
             if (b_verbose) printf("\tDealing with the boundary \"%u\"\n", j);
             const boundary_id id = ids[j];
-            PyTupleObject* t = bnds[j];
+            PyObject* t = bnds[j];
             boundary bnd;
             int bnd_id = 0;
             unsigned bnd_n = 0;
-            if (PyTuple_GET_SIZE(t) != 5)
+            if (PyTuple_Size(t) != 5)
             {
                 PyMem_FREE(p_blocks);
                 return PyErr_Format(PyExc_RuntimeError, "Boundary tuple had an invalid length (should be 5)");
             }
-            int bnd_type = (int)PyLong_AsLong(PyTuple_GET_ITEM(t, 0));
+            int bnd_type = (int)PyLong_AsLong(PyTuple_GetItem(t, 0));
             if (b_verbose) printf("\t\tBoundary type: \"%d\"\n", bnd_type);
             if (bnd_type == 0)
             {
@@ -504,7 +529,7 @@ static PyObject* rmsh_create_mesh_function(PyObject* self, PyObject* args)
     if (b_verbose) printf("Finished converting the inputs\n");
     //  Blocks should be all set up now
 
-    PyMesh2dObject* msh = PyObject_New(PyMesh2dObject, &mesh_type);
+    PyMesh2dObject* msh = PyObject_New(PyMesh2dObject, mesh_type);
     if (msh == NULL)
     {
         PyMem_FREE(p_blocks);
@@ -576,17 +601,17 @@ PyMODINIT_FUNC PyInit__rmsh(void)
     if (PyArray_ImportNumPyAPI() < 0) {
         return NULL;
     }
-    if (PyType_Ready(&mesh_type) < 0)
-    {
-        return NULL;
-    }
+    PyObject* mesh_type = PyType_FromSpec(&mesh_type_spec);
+    // if (PyType_Ready(&mesh_type) < 0)
+    // {
+    //     return NULL;
+    // }
     PyObject* m = PyModule_Create(&module_definition);
     if (m == NULL)
     {
         return m;
     }
-    Py_INCREF(&mesh_type);
-    if (PyModule_AddObject(m, "mesh", (PyObject*)&mesh_type) < 0)
+    if (PyModule_AddObject(m, "mesh", mesh_type) < 0)
     {
         Py_DECREF(&mesh_type);
         Py_DECREF(m);
