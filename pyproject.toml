@@ -5,12 +5,12 @@ build-backend = "scikit_build_core.build"
 
 [tool.scikit-build]
 wheel.py-api = "cp310"
-wheel.license-files = ["LICENSE"]
+wheel.license-files = ["LICENSE.txt"]
 
 [project]
 name = "rmsh"
 dependencies=["numpy>=1.4"]
-version = "0.0.1"
+version = "0.0.1a1"
 requires-python=">=3.10"
 authors = [
     {name="Jan Roth", email="r0th.j4n@gmail.com"}
