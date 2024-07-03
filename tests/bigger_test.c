@@ -3,8 +3,8 @@
 #include <math.h>
 #include <stdlib.h>
 
-#include "io.h"
-#include "mesh2d.h"
+#include "../src/mesh2d.h"
+#include "../src/io.h"
 
 static void* wrap_alloc(void* state, size_t sz)
 {

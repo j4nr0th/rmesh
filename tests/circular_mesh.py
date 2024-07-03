@@ -1,7 +1,7 @@
 import numpy as np
 from matplotlib import pyplot as plt
 from matplotlib.collections import LineCollection
-from rmsh.base import BoundaryCurve, MeshBlock, Mesh2D, create_elliptical_mesh, BoundaryId, BoundaryBlock, SolverConfig
+from rmsh import BoundaryCurve, MeshBlock, Mesh2D, create_elliptical_mesh, BoundaryId, BoundaryBlock, SolverConfig
 from scipy import sparse as sp
 
 

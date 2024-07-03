@@ -1,10 +1,8 @@
 import numpy as np
 from matplotlib import pyplot as plt
-from matplotlib import collections as col
-from rmsh import geometry
-from rmsh import meshblocks
+from rmsh import *
 from scipy.interpolate import make_interp_spline
-from scipy.interpolate import BSpline, NdBSpline
+from scipy.interpolate import BSpline
 from dataclasses import dataclass
 
 

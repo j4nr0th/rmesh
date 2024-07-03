@@ -2,11 +2,11 @@ import numpy as np
 from dataclasses import dataclass
 from matplotlib import pyplot as plt
 import matplotlib.collections as col
-from scipy.interpolate import (BSpline as BS, splprep, splev)
+from scipy.interpolate import (splprep, splev)
 from bezier import curve
+from os import path
 
-
-from rmsh.base import *
+from rmsh import *
 
 
 
@@ -70,7 +70,6 @@ def discretize(pts: dict[int, Point], o, n: int, prog: float) -> tuple[np.ndarra
     #     p2: Point = o.p2
     #     p3: Point = o.p3
 
-
     raise RuntimeError(f"Invalid type of the object: {to}")
 
 
@@ -109,8 +108,10 @@ b_dict = dict()
 lcntr = 0
 pcntr = 0
 
-af_data = np.loadtxt("airfoil_13.dat")
-fl_data = np.loadtxt("flap_13.dat")
+loc = path.split(__file__)[0]
+
+af_data = np.loadtxt(path.join(loc, "airfoil_13.dat"))
+fl_data = np.loadtxt(path.join(loc, "flap_13.dat"))
 
 for i in range(af_data.shape[0]):
     pt_dict[pcntr+1] = Point(af_data[i, 0], af_data[i, 1])
@@ -126,15 +127,15 @@ for i in range(fl_data.shape[0]):
 ln_dict[lcntr+1] = Line(np.arange(1+af_data.shape[0], len(pt_dict)+1))
 lcntr += 1
 
-#------------------------------------------------------------
+# ------------------------------------------------------------
 #
 #            CURVE AND POINT DEFINITION
 #
-#------------------------------------------------------------
+# ------------------------------------------------------------
 #  Far field parameters
 D_FAR_FIELD = 10
 THETA_FAR_FIELD = 10
-D_FAR_FRONT = 5    #  Controls the distance of the front section
+D_FAR_FRONT = 5    # Controls the distance of the front section
 THETA_FRONT = 30   # Controls the angle of the front section
 
 # PARAMETERS WING C MESH

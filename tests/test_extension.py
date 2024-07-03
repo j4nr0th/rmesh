@@ -1,5 +1,4 @@
-from rmsh import meshblocks as mb
-from rmsh import geometry as ge
+from rmsh import *
 from typing import Callable
 import numpy as np
 from matplotlib import pyplot as plt
@@ -20,20 +19,20 @@ if __name__ == "__main__":
 
     NBND = 400
 
-    c0 = ge.BoundaryCurve(x=interpolate(X0, X1, lambda t: t**2, NBND), y=interpolate(Y0, Y1, lambda t: t**2, NBND))
-    c1 = ge.BoundaryCurve(x=interpolate(X1, X2, lambda t: t**2, NBND), y=interpolate(Y1, Y2, lambda t: t**2, NBND))
-    c2 = ge.BoundaryCurve(x=interpolate(X2, X3, lambda t: t**2, NBND), y=interpolate(Y2, Y3, lambda t: t**2, NBND))
-    c3 = ge.BoundaryCurve(x=interpolate(X3, X0, lambda t: t**2, NBND), y=interpolate(Y3, Y0, lambda t: t**2, NBND))
+    c0 = BoundaryCurve(x=interpolate(X0, X1, lambda t: t**2, NBND), y=interpolate(Y0, Y1, lambda t: t**2, NBND))
+    c1 = BoundaryCurve(x=interpolate(X1, X2, lambda t: t**2, NBND), y=interpolate(Y1, Y2, lambda t: t**2, NBND))
+    c2 = BoundaryCurve(x=interpolate(X2, X3, lambda t: t**2, NBND), y=interpolate(Y2, Y3, lambda t: t**2, NBND))
+    c3 = BoundaryCurve(x=interpolate(X3, X0, lambda t: t**2, NBND), y=interpolate(Y3, Y0, lambda t: t**2, NBND))
 
-    b1 = mb.MeshBlock("first",
+    b1 = MeshBlock("first",
                       {
-                          ge.BoundaryId.BoundarySouth: c0,
-                          ge.BoundaryId.BoundaryEast: c1,
-                          ge.BoundaryId.BoundaryNorth: c2,
-                          ge.BoundaryId.BoundaryWest: c3
+                          BoundaryId.BoundarySouth: c0,
+                          BoundaryId.BoundaryEast: c1,
+                          BoundaryId.BoundaryNorth: c2,
+                          BoundaryId.BoundaryWest: c3
                       })
 
-    m = mb.create_elliptical_mesh([b1], verbose=True)
+    m, _, _ = create_elliptical_mesh([b1], verbose=True, solver_cfg=SolverConfig(tolerance=1e-5))
 
     x = m.x
     y = m.y

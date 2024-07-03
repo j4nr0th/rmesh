@@ -1,15 +1,17 @@
 //
 // Created by jan on 22.6.2024.
 //
+
+#define PY_LIMITED_API 0x030A0000
+
 #define PY_SSIZE_CLEAN
 #include <Python.h>
 #define PY_ARRAY_UNIQUE_SYMBOL _rmshAPI
 #include <numpy/npy_no_deprecated_api.h>
 #include <numpy/ndarrayobject.h>
 
-#include "../geometry.h"
-#include "../mesh2d.h"
-#include "../io.h"
+#include "geometry.h"
+#include "mesh2d.h"
 
 
 //  Mesh type Python interface
