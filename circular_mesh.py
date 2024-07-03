@@ -2,6 +2,7 @@ import numpy as np
 from matplotlib import pyplot as plt
 from matplotlib.collections import LineCollection
 from rmsh.base import BoundaryCurve, MeshBlock, Mesh2D, create_elliptical_mesh, BoundaryId, BoundaryBlock, SolverConfig
+from scipy import sparse as sp
 
 
 def one_block_only(n1: int, n2: int) -> Mesh2D:
@@ -22,7 +23,7 @@ def one_block_only(n1: int, n2: int) -> Mesh2D:
         BoundaryId.BoundarySouth: cb,
     })
 
-    m, _, _ = create_elliptical_mesh([block], verbose=True)
+    m, _, _ = create_elliptical_mesh([block], verbose=False)
     return m
 
 
@@ -43,7 +44,7 @@ def self_closed_mesh(n1: int, n2: int) -> Mesh2D:
         BoundaryId.BoundarySouth: cb,
     })
 
-    m, _, _ = create_elliptical_mesh([block], verbose=True)
+    m, _, _ = create_elliptical_mesh([block], verbose=False)
     return m
 
 
@@ -83,7 +84,7 @@ def four_wierdly_connected_ones(n1: int, n2: int) -> Mesh2D:
         BoundaryId.BoundarySouth: cb,
     })
 
-    m, _, _ = create_elliptical_mesh([blockwest, blockeast, blocknorth, blocksouth], verbose=True,
+    m, _, _ = create_elliptical_mesh([blockwest, blockeast, blocknorth, blocksouth], verbose=False,
                                      solver_cfg=SolverConfig(smoother_rounds=0, max_iterations=64))
     return m
 
@@ -130,7 +131,7 @@ def as_god_intended(n1: int, n2: int, n3: int) -> Mesh2D:
         BoundaryId.BoundarySouth: BoundaryBlock("bottom", BoundaryId.BoundaryNorth, n2),
     })
 
-    m, _, _ = create_elliptical_mesh([blockwest, blockeast, blocknorth, blocksouth, blockmiddle], verbose=True,
+    m, _, _ = create_elliptical_mesh([blockwest, blockeast, blocknorth, blocksouth, blockmiddle], verbose=False,
                                      solver_cfg=SolverConfig(smoother_rounds=0, max_iterations=128, tolerance=5e-6))
     return m
 
@@ -143,8 +144,49 @@ def ungodly(n1: int, n2: int) -> Mesh2D:
         BoundaryId.BoundarySouth: BoundaryBlock("center", BoundaryId.BoundaryNorth, n2),
     })
 
-    m, _, _ = create_elliptical_mesh([blockmiddle], verbose=True,
+    m, _, _ = create_elliptical_mesh([blockmiddle], verbose=False,
         solver_cfg=SolverConfig(smoother_rounds=0, max_iterations=64))
+    return m
+
+
+def four_weirder(n: int) -> Mesh2D:
+    angle_l = np.linspace(+0*np.pi/2, +1*np.pi/2, n)
+    angle_b = np.linspace(+1*np.pi/2, +2*np.pi/2, n)
+    angle_r = np.linspace(+2*np.pi/2, +3*np.pi/2, n)
+    angle_t = np.linspace(+3*np.pi/2, +4*np.pi/2, n)
+
+    cl = BoundaryCurve(np.cos(angle_l), np.sin(angle_l))
+    cr = BoundaryCurve(np.cos(angle_r), np.sin(angle_r))
+    ct = BoundaryCurve(np.cos(angle_t), np.sin(angle_t))
+    cb = BoundaryCurve(np.cos(angle_b), np.sin(angle_b))
+
+    blockwest = MeshBlock("left", {
+        BoundaryId.BoundaryWest: cl,
+        BoundaryId.BoundaryEast: BoundaryBlock("bottom", BoundaryId.BoundaryWest),
+        BoundaryId.BoundaryNorth: BoundaryBlock("top", BoundaryId.BoundarySouth),
+        BoundaryId.BoundarySouth: BoundaryBlock("right", BoundaryId.BoundaryNorth),
+    })
+    blockeast = MeshBlock("right", {
+        BoundaryId.BoundaryWest: BoundaryBlock("top", BoundaryId.BoundaryEast),
+        BoundaryId.BoundaryEast: cr,
+        BoundaryId.BoundaryNorth: BoundaryBlock("left", BoundaryId.BoundarySouth),
+        BoundaryId.BoundarySouth: BoundaryBlock("bottom", BoundaryId.BoundaryNorth),
+    })
+    blocknorth = MeshBlock("top", {
+        BoundaryId.BoundaryWest: BoundaryBlock("bottom", BoundaryId.BoundaryEast),
+        BoundaryId.BoundaryEast: BoundaryBlock("right", BoundaryId.BoundaryWest),
+        BoundaryId.BoundaryNorth: ct,
+        BoundaryId.BoundarySouth: BoundaryBlock("left", BoundaryId.BoundaryNorth),
+    })
+    blocksouth = MeshBlock("bottom", {
+        BoundaryId.BoundaryWest: BoundaryBlock("left", BoundaryId.BoundaryEast),
+        BoundaryId.BoundaryEast: BoundaryBlock("top", BoundaryId.BoundaryWest),
+        BoundaryId.BoundaryNorth: BoundaryBlock("right", BoundaryId.BoundarySouth),
+        BoundaryId.BoundarySouth: cb,
+    })
+
+    m, _, _ = create_elliptical_mesh([blockwest, blockeast, blocknorth, blocksouth], verbose=False,
+                                     solver_cfg=SolverConfig(smoother_rounds=0, max_iterations=64))
     return m
 
 
@@ -177,7 +219,21 @@ if __name__ == "__main__":
     plot_mesh(m)
     m = four_wierdly_connected_ones(50, 50)
     plot_mesh(m)
-    m = as_god_intended(500, 500, 50)
+    m = as_god_intended(5, 5, 5)
     plot_mesh(m)
+    lines = m.lines
+    x = m.x
+    # p1 = lines[:, 0]
+    # p2 = lines[:, 1]
+    rows = np.arange(lines.shape[0])
+    rows = np.stack((rows, rows), axis=1).flatten()
+    cols = lines.flatten()
+    data = np.stack((np.ones(lines.shape[0]),-np.ones(lines.shape[0])), axis=1).flatten()
+    e10 = sp.csr_array((data, (rows, cols)), shape=(lines.shape[0], x.shape[0]))
+    plt.spy(e10)
+    plt.show()
+
     m = ungodly(10, 10)
+    plot_mesh(m)
+    m = four_weirder(10)
     plot_mesh(m)

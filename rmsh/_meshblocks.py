@@ -87,6 +87,10 @@ class Mesh2D:
         a = self._internal.boundary_pts(self._block_name_map[block_id], boundary.value)
         return a
 
+    def block_boundary_surfaces(self, block_id: str, boundary: BoundaryId) -> np.ndarray:
+        a = self._internal.boundary_surf(self._block_name_map[block_id], boundary.value)
+        return a
+
 
 def _find_boundary_size(bnd: BoundaryBlock, blcks: dict[str, tuple[int, MeshBlock]]):
     if type(bnd) is BoundaryCurve:
@@ -122,7 +126,6 @@ def _find_boundary_size(bnd: BoundaryBlock, blcks: dict[str, tuple[int, MeshBloc
         else:
             checked.append(new_bnd)
         i += 1
-        print(i)
     raise RuntimeError(f"Circular reference for block boundaries without specifying their size")
     
 

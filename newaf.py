@@ -728,6 +728,7 @@ m, rx, ry = create_elliptical_mesh([b for b in b_dict.values()], verbose=True)
 x = m.x
 y = m.y
 ln = m.lines
+surf = m.surfaces
 ncols = len(m.block_names)
 cmap = plt.colormaps.get_cmap("jet")
 #show_list = [str(j) for j in np.arange(22, 28) + 1]
@@ -788,6 +789,24 @@ for i, idx in enumerate(east_node_indices):
     plt.scatter(x[idx], y[idx], color=cmap(i/(neast-1)))
 for i, idx in enumerate(west_node_indices):
     plt.scatter(x[idx], y[idx], color=cmap(i/(nwest-1)))
+
+
+bname = m.block_names[0]
+
+surf_indices = m.block_boundary_surfaces(bname, BoundaryId.BoundaryWest)
+nsurf = len(surf_indices)
+vertices = []
+for i, idx in enumerate(surf_indices):
+    line_indices = abs(surf[idx]) - 1
+    lines = ln[line_indices, :]
+    point_indices = lines[:, 0] * (surf[idx] > 0) + lines[:, 1] * (surf[idx] < 0)
+    xvals = x[point_indices]
+    yvals = y[point_indices]
+    pts = np.stack((xvals, yvals), axis=1)
+    vertices.append(pts)
+vertices = np.array(vertices)
+plt.gca().add_collection(col.PolyCollection(vertices, color="green"))
+
 
 plt.legend()
 

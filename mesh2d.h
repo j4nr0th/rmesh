@@ -40,11 +40,6 @@ struct block_info_struct
     //  Indices of the first and last points in the mesh block. There might be some shared with other blocks, but those
     //  are not included in here
     unsigned first_pt, last_pt;
-    //  Indices of mesh blocks which border this block and where they border it. -1 means that there is no block bordering it
-    struct
-    {
-        int west, east, north, south;
-    } neighboring_block_idx;
 
     //  Indices of the first and last lines in the mesh block. There might be some shared with other blocks, but those
     //  are not included in here
@@ -95,6 +90,10 @@ error_id mesh2d_get_boundary_lines_info(
     const geo_id** p_first, unsigned* p_count, int* p_stride);
 
 error_id mesh2d_get_boundary_points_info(
+    const mesh2d* mesh, unsigned block, boundary_id boundary,
+    const geo_id** p_first, unsigned* p_count, int* p_stride);
+
+error_id mesh2d_get_boundary_surface_info(
     const mesh2d* mesh, unsigned block, boundary_id boundary,
     const geo_id** p_first, unsigned* p_count, int* p_stride);
 

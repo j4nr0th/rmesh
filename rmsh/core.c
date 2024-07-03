@@ -11,10 +11,6 @@
 #include "../mesh2d.h"
 #include "../io.h"
 
-static PyObject* rmsh_info_func(PyObject* self, PyObject* args)
-{
-    return PyUnicode_FromString("rmsh - dev version");
-}
 
 //  Mesh type Python interface
 typedef struct PyMesh2dObject
@@ -253,6 +249,55 @@ static PyObject* mesh_boundary_points(PyObject* self, PyObject* v)
 
 }
 
+static PyObject* mesh_boundary_surfaces(PyObject* self, PyObject* v)
+{
+    unsigned block_idx, bndid;
+    if (!PyArg_ParseTuple(v, "II", &block_idx, &bndid))
+    {
+        return NULL;
+    }
+    PyMesh2dObject* this = (PyMesh2dObject*)self;
+    if (block_idx >= this->data.n_blocks)
+    {
+        return PyErr_Format(PyExc_IndexError, "Invalid index of %u was passed when the mesh only has %u blocks", block_idx, this->data.n_blocks);
+    }
+    boundary_id id;
+    switch ((boundary_id)bndid)
+    {
+    case BOUNDARY_ID_EAST:
+    case BOUNDARY_ID_WEST:
+    case BOUNDARY_ID_NORTH:
+    case BOUNDARY_ID_SOUTH:
+        id = bndid;
+        break;
+    default:
+        return PyErr_Format(PyExc_ValueError, "Boundary ID has an invalid value of %u", bndid);
+    }
+
+    const geo_id* first;
+    unsigned cnt;
+    int stride;
+    error_id res = mesh2d_get_boundary_surface_info(&this->data, block_idx, id, &first, &cnt, &stride);
+    if (res != MESH_SUCCESS)
+    {
+        return PyErr_Format(PyExc_RuntimeError, "Failed to retrieve block line info (error code %d)", res);
+    }
+    npy_intp dims = cnt;
+    npy_intp strides = sizeof(*first)*stride;
+    PyArrayObject* arr = (PyArrayObject*)PyArray_New(&PyArray_Type, 1, &dims, NPY_INT32, &strides, (void*)first, sizeof(*first), 0, NULL);
+    if (arr)
+    {
+        Py_INCREF(self);
+        if (PyArray_SetBaseObject(arr, self) != 0)
+        {
+            Py_DECREF(self);
+            Py_DECREF(arr);
+            arr = NULL;
+        }
+    }
+    return (PyObject*)arr;
+}
+
 static PyGetSetDef mesh_getset[] =
     {
         {"x", mesh_getx, NULL, "X coordinates of nodes", NULL},
@@ -267,6 +312,7 @@ static PyMethodDef mesh_methods[] =
         {.ml_name = "blines", .ml_meth = mesh_block_lines, .ml_flags = METH_O, .ml_doc = "retrieves indices of lines which are in a block with the given index"},
         {.ml_name = "boundary_lines", .ml_meth = mesh_boundary_lines, .ml_flags = METH_VARARGS, .ml_doc = "Retrieves line indices for a specified boundary of a block"},
         {.ml_name = "boundary_pts", .ml_meth = mesh_boundary_points, .ml_flags = METH_VARARGS, .ml_doc = "Retrieves point indices for a specified boundary of a block"},
+        {.ml_name = "boundary_surf", .ml_meth = mesh_boundary_surfaces, .ml_flags = METH_VARARGS, .ml_doc = "Retrieves surface indices for a specified boundary of a block"},
         {NULL}  //  Sentinel
     };
 
@@ -508,7 +554,6 @@ static PyObject* rmsh_create_mesh_function(PyObject* self, PyObject* args)
 
 static PyMethodDef module_methods[] =
     {
-        {.ml_name = "info", .ml_meth = rmsh_info_func, .ml_flags = METH_NOARGS, .ml_doc = "Prints the info about th module"},
         {.ml_name = "create_elliptical_mesh", .ml_meth = rmsh_create_mesh_function, .ml_flags = METH_VARARGS, .ml_doc = "Internal module function, which creates an elliptical mesh"},
         //  Terminating entry
         {NULL, NULL, 0, NULL},

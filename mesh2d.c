@@ -395,29 +395,6 @@ static inline void deal_with_point_boundary(const unsigned i, const boundary_blo
     }
 }
 
-static inline boundary_id get_target_boundary(const block_info* target_info, geo_id block)
-{
-    if (target_info->neighboring_block_idx.north == block)
-    {
-        return BOUNDARY_ID_NORTH;
-    }
-
-    if (target_info->neighboring_block_idx.south == block)
-    {
-        return BOUNDARY_ID_SOUTH;
-    }
-
-    if (target_info->neighboring_block_idx.east == block)
-    {
-        return BOUNDARY_ID_EAST;
-    }
-
-    if (target_info->neighboring_block_idx.west == block)
-    {
-        return BOUNDARY_ID_WEST;
-    }
-    return 0;
-}
 
 
 /**
@@ -443,25 +420,6 @@ static inline int are_curve_boundaries_the_same(const boundary_curve* b1, const 
     return 1;
 }
 
-
-static inline void set_neighboring_block(block_info* bi, boundary_id id, geo_id block_idx)
-{
-    switch (id)
-    {
-    case BOUNDARY_ID_NORTH:
-        bi->neighboring_block_idx.north = block_idx;
-        break;
-    case BOUNDARY_ID_SOUTH:
-        bi->neighboring_block_idx.south = block_idx;
-        break;
-    case BOUNDARY_ID_EAST:
-        bi->neighboring_block_idx.east = block_idx;
-        break;
-    case BOUNDARY_ID_WEST:
-        bi->neighboring_block_idx.west = block_idx;
-        break;
-    }
-}
 
 static error_id generate_mesh2d_from_geometry(unsigned n_blocks, mesh2d_block* blocks, mesh2d* p_out, allocator* allocator, const mesh_geo_args args)
 {
@@ -520,7 +478,7 @@ static error_id generate_mesh2d_from_geometry(unsigned n_blocks, mesh2d_block* b
             }
             if (j != i)
             {
-                printf("Blocks %u and %u share boundaries %s and %s\n", i, j, boundary_id_to_str(BOUNDARY_ID_NORTH), boundary_id_to_str(bid));
+                // printf("Blocks %u and %u share boundaries %s and %s\n", i, j, boundary_id_to_str(BOUNDARY_ID_NORTH), boundary_id_to_str(bid));
                 assert(bid != 0);
                 b->bnorth.type = BOUNDARY_TYPE_BLOCK;
                 b->bnorth.block = (boundary_block){.n = b->bnorth.n, .owner = i, .owner_id = BOUNDARY_ID_NORTH, .target = j, .target_id = bid};
@@ -558,7 +516,7 @@ static error_id generate_mesh2d_from_geometry(unsigned n_blocks, mesh2d_block* b
             }
             if (j != i)
             {
-                printf("Blocks %u and %u share boundaries %s and %s\n", i, j, boundary_id_to_str(BOUNDARY_ID_SOUTH), boundary_id_to_str(bid));
+                // printf("Blocks %u and %u share boundaries %s and %s\n", i, j, boundary_id_to_str(BOUNDARY_ID_SOUTH), boundary_id_to_str(bid));
                 assert(bid != 0);
                 b->bsouth.type = BOUNDARY_TYPE_BLOCK;
                 b->bsouth.block = (boundary_block){.n = b->bsouth.n, .owner = i, .owner_id = BOUNDARY_ID_SOUTH, .target = j, .target_id = bid};
@@ -596,7 +554,7 @@ static error_id generate_mesh2d_from_geometry(unsigned n_blocks, mesh2d_block* b
             if (j != i)
             {
                 assert(bid != 0);
-                printf("Blocks %u and %u share boundaries %s and %s\n", i, j, boundary_id_to_str(BOUNDARY_ID_EAST), boundary_id_to_str(bid));
+                // printf("Blocks %u and %u share boundaries %s and %s\n", i, j, boundary_id_to_str(BOUNDARY_ID_EAST), boundary_id_to_str(bid));
                 b->beast.type = BOUNDARY_TYPE_BLOCK;
                 b->beast.block = (boundary_block){.n = b->beast.n, .owner = i, .owner_id = BOUNDARY_ID_EAST, .target = j, .target_id = bid};
             }
@@ -632,7 +590,7 @@ static error_id generate_mesh2d_from_geometry(unsigned n_blocks, mesh2d_block* b
             }
             if (j != i)
             {
-                printf("Blocks %u and %u share boundaries %s and %s\n", i, j, boundary_id_to_str(BOUNDARY_ID_WEST), boundary_id_to_str(bid));
+                // printf("Blocks %u and %u share boundaries %s and %s\n", i, j, boundary_id_to_str(BOUNDARY_ID_WEST), boundary_id_to_str(bid));
                 assert(bid != 0);
                 b->bwest.type = BOUNDARY_TYPE_BLOCK;
                 b->bwest.block = (boundary_block){.n = b->bwest.n, .owner = i, .owner_id = BOUNDARY_ID_WEST, .target = j, .target_id = bid};
@@ -650,67 +608,23 @@ static error_id generate_mesh2d_from_geometry(unsigned n_blocks, mesh2d_block* b
         bi->first_pt = unique_pts;
         if (b->bnorth.type == BOUNDARY_TYPE_BLOCK && (iother = (b->bnorth.block.target)) < i)
         {
-            for (unsigned j = 0; j < b->bnorth.n; ++j)
-            {
-                unsigned other_idx = info[iother].points[point_boundary_index_flipped(info + iother, (b->bnorth.block.target_id), j)];
-                unsigned this_idx = point_boundary_index(bi, BOUNDARY_ID_NORTH, j);
-                newx[other_idx] += args.xnodal[this_idx + args.block_offsets[i]];
-                newy[other_idx] += args.ynodal[this_idx + args.block_offsets[i]];
-                bi->points[this_idx] = other_idx;
-                division_factor[other_idx] += 1;
-            }
+            deal_with_point_boundary(i, &b->bnorth.block, bi, info + iother, newx, newy, division_factor, &args);
             hasn = 1;
-            bi->neighboring_block_idx.north = iother;
-            set_neighboring_block(info + iother, b->bnorth.block.target_id, i);
-            // duplicate += b->bnorth.n;
         }
         if (b->bsouth.type == BOUNDARY_TYPE_BLOCK && (iother = (b->bsouth.block.target)) < i)
         {
-            for (unsigned j = 0; j < b->bsouth.n; ++j)
-            {
-                unsigned other_idx = info[iother].points[point_boundary_index_flipped(info + iother, (b->bsouth.block.target_id), j)];
-                unsigned this_idx = point_boundary_index(bi, BOUNDARY_ID_SOUTH, j);
-                newx[other_idx] += args.xnodal[this_idx + args.block_offsets[i]];
-                newy[other_idx] += args.ynodal[this_idx + args.block_offsets[i]];
-                bi->points[this_idx] = other_idx;
-                division_factor[other_idx] += 1;
-            }
+            deal_with_point_boundary(i, &b->bsouth.block, bi, info + iother, newx, newy, division_factor, &args);
             hass = 1;
-            bi->neighboring_block_idx.south = iother;
-            set_neighboring_block(info + iother, b->bsouth.block.target_id, i);
-            // duplicate += b->bsouth.n;
         }
         if (b->beast.type == BOUNDARY_TYPE_BLOCK && (iother = (b->beast.block.target)) < i)
         {
-            for (unsigned j = 0; j < b->beast.n; ++j)
-            {
-                unsigned other_idx = info[iother].points[point_boundary_index_flipped(info + iother, (b->beast.block.target_id), j)];
-                unsigned this_idx = point_boundary_index(bi, BOUNDARY_ID_EAST, j);
-                newx[other_idx] += args.xnodal[this_idx + args.block_offsets[i]];
-                newy[other_idx] += args.ynodal[this_idx + args.block_offsets[i]];
-                bi->points[this_idx] = other_idx;
-                division_factor[other_idx] += 1;
-            }
+            deal_with_point_boundary(i, &b->beast.block, bi, info + iother, newx, newy, division_factor, &args);
             hase = 1;
-            // duplicate += (b->beast.n - (bi->points[bi->n2 - 1] != ~0u) - (bi->points[bi->n2 * bi->n1 - 1] != ~0u));
-            bi->neighboring_block_idx.east = iother;
-            set_neighboring_block(info + iother, b->beast.block.target_id, i);
         }
         if (b->bwest.type == BOUNDARY_TYPE_BLOCK && (iother = (b->bwest.block.target)) < i)
         {
-            for (unsigned j = 0; j < b->bwest.n; ++j)
-            {
-                unsigned other_idx = info[iother].points[point_boundary_index_flipped(info + iother, (b->bwest.block.target_id), j)];
-                unsigned this_idx = point_boundary_index(bi, BOUNDARY_ID_WEST, j);
-                newx[other_idx] += args.xnodal[this_idx + args.block_offsets[i]];
-                newy[other_idx] += args.ynodal[this_idx + args.block_offsets[i]];
-                bi->points[this_idx] = other_idx;
-                division_factor[other_idx] += 1;
-            }
+            deal_with_point_boundary(i, &b->bwest.block, bi, info + iother, newx, newy, division_factor, &args);
             hasw = 1;
-            // duplicate += (b->beast.n - (bi->points[0] != ~0u) - (bi->points[bi->n2 * (bi->n1 - 1)] != ~0u));
-            bi->neighboring_block_idx.west = iother;
-            set_neighboring_block(info + iother, b->bwest.block.target_id, i);
         }
         // unsigned new_pts = bi->n1 * bi->n2 - duplicate;
         // unsigned offset = unique_pts;
@@ -965,10 +879,6 @@ error_id mesh2d_create_elliptical(unsigned n_blocks, mesh2d_block* blocks, const
         assert(info[iblk].lines);
         info[iblk].surfaces = allocator->alloc(allocator, (n1 - 1) * (n2 - 1) * sizeof(*info[iblk].surfaces));
         assert(info[iblk].surfaces);
-        info[iblk].neighboring_block_idx.north = -1;
-        info[iblk].neighboring_block_idx.south = -1;
-        info[iblk].neighboring_block_idx.east = -1;
-        info[iblk].neighboring_block_idx.west = -1;
         if (iblk != n_blocks - 1)
         {
             block_offsets[iblk + 1] = npts + block_offsets[iblk];
@@ -1424,6 +1334,45 @@ error_id mesh2d_get_boundary_points_info(
     case BOUNDARY_ID_SOUTH:
         cnt = info->n2;
         *p_first = info->points + 0;
+        *p_stride = +1;
+        break;
+    default:
+        return MESH_INVALID_BOUNDARY_ID;
+    }
+    *p_count = cnt;
+    return MESH_SUCCESS;
+}
+
+error_id mesh2d_get_boundary_surface_info(
+    const mesh2d* mesh, unsigned block, boundary_id boundary,
+    const geo_id** p_first, unsigned* p_count, int* p_stride)
+{
+    if (block >= mesh->n_blocks)
+    {
+        return MESH_INDEX_OUT_OF_BOUNDS;
+    }
+    unsigned cnt;
+    const block_info* const info = mesh->block_info + block;
+    switch (boundary)
+    {
+    case BOUNDARY_ID_EAST:
+        cnt = info->n1 - 1;
+        *p_first = info->points + (info->n2 - 2);
+        *p_stride = +(info->n2 - 1);
+        break;
+    case BOUNDARY_ID_WEST:
+        cnt = info->n1 - 1;
+        *p_first = info->surfaces + ((info->n2 - 1) * (info->n1 - 2));
+        *p_stride = -(info->n2 - 1);
+        break;
+    case BOUNDARY_ID_NORTH:
+        cnt = info->n2 - 1;
+        *p_first = info->surfaces + ((info->n2 - 1) * (info->n1 - 1) - 1);
+        *p_stride = -1;
+        break;
+    case BOUNDARY_ID_SOUTH:
+        cnt = info->n2 - 1;
+        *p_first = info->surfaces + 0;
         *p_stride = +1;
         break;
     default:
