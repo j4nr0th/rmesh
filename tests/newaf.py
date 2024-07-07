@@ -794,7 +794,7 @@ for i, idx in enumerate(west_node_indices):
 
 bname = m.block_names[0]
 
-surf_indices = m.block_boundary_surfaces(bname, BoundaryId.BoundaryWest)
+surf_indices = m.block_boundary_surfaces(bname, BoundaryId.BoundaryWest) - 1
 nsurf = len(surf_indices)
 vertices = []
 for i, idx in enumerate(surf_indices):
@@ -808,6 +808,10 @@ for i, idx in enumerate(surf_indices):
 vertices = np.array(vertices)
 plt.gca().add_collection(col.PolyCollection(vertices, color="green"))
 
+print(m.surface_element(10, 0))
+print(m.surface_element(10, 1))
+print(m.surface_element(10, 2))
+print(m.surface_element(10, 3))
 
 plt.legend()
 

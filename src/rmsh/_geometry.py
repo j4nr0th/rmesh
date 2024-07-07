@@ -3,6 +3,10 @@ import numpy as np
 from enum import Enum, unique
 
 
+INVALID_POINT_IDX = -1
+INVALID_LINE_IDX = 0
+
+
 @dataclass(frozen=True)
 class Line:
     """ Defines a line in terms of its topology. Each line should have a positive orientation.
@@ -51,10 +55,10 @@ class BoundaryId(Enum):
         - BoundaryWest
         - BoundarySouth
     """
-    BoundaryNorth = 1
+    BoundarySouth = 1
     BoundaryEast = 2
-    BoundaryWest = 3
-    BoundarySouth = 4
+    BoundaryNorth = 3
+    BoundaryWest = 4
 
 
 @dataclass(frozen=True)

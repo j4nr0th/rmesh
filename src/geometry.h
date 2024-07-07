@@ -22,11 +22,12 @@ const char* boundary_type_to_str(boundary_type type);
 
 enum boundary_id_enum
 {
-    BOUNDARY_ID_NORTH = 1,
+    BOUNDARY_ID_SOUTH = 1,
     BOUNDARY_ID_EAST = 2,
-    BOUNDARY_ID_WEST = 3,
-    BOUNDARY_ID_SOUTH = 4,
+    BOUNDARY_ID_NORTH = 3,
+    BOUNDARY_ID_WEST = 4,
 };
+enum {BOUNDARY_COUNT = 4, INVALID_BLOCK = -1, BOUNDARY_ID_INVALID = -1, INVALID_POINT = -1, INVALID_LINE = 0, INVALID_SURFACE = 0};
 typedef enum boundary_id_enum boundary_id;
 const char* boundary_id_to_str(boundary_id id);
 
@@ -64,10 +65,17 @@ struct boundary_struct
 struct mesh_block_struct
 {
     const char* label;
-    boundary bnorth;
-    boundary beast;
-    boundary bwest;
-    boundary bsouth;
+    union
+    {
+        struct
+        {
+            boundary bsouth;
+            boundary beast;
+            boundary bnorth;
+            boundary bwest;
+        };
+        boundary bnd_array[BOUNDARY_COUNT];
+    };
 };
 
 #endif //MESH_GEOMETRY_H

@@ -186,7 +186,8 @@ class Mesh2D:
         return a
 
     def block_boundary_surfaces(self, block_id: str, boundary: BoundaryId) -> np.ndarray:
-        """Returns an array with indices of all surfaces on a boundary of a block.
+        """Returns an array with indices of all surfaces on a boundary of a block. Indices start at 1 and a negative value
+        indicates a reversed orientation of the surface, though for this function this is not needed.
 
         Parameters
         ----------
@@ -202,6 +203,26 @@ class Mesh2D:
         """
         a = self._internal.boundary_surf(self._block_name_map[block_id], boundary.value)
         return a
+
+    def surface_element(self, surf: int|np.ndarray, order: int) -> np.ndarray:
+        """Returns the indices of surfaces, which form a square element of width (2 * order + 1) elements. This is
+        intended to be used for computing cell-based interpolations.
+
+        Parameters
+        ----------
+        surf : int
+            The one-based index of the surface which should be the center of the element.
+        order : int
+            Size of the element in each direction away from the center (zero means only the element, one means 3 x 3,
+             etc.)
+
+        Returns
+        ----------
+        ndarray[int32]
+            Array with indices of all surfaces in the element. Note that since one-based indexing is used, a zero
+            indicates a missing surface caused by a numerical boundary. Negative indices mean a negative orientation.
+        """
+        return self._internal.surface_element(surf, order)
 
 
 def _find_boundary_size(bnd: BoundaryBlock, blcks: dict[str, tuple[int, MeshBlock]]):

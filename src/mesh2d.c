@@ -7,7 +7,6 @@
 #include <jmtx/double/matrices/sparse_column_compressed.h>
 #include <jmtx/double/solvers/bicgstab_iteration.h>
 #include <assert.h>
-#include <math.h>
 #include <stdio.h>
 #include <time.h>
 
@@ -257,7 +256,8 @@ static inline void free_block_info(block_info* info, allocator* allocator)
 }
 
 
-static inline unsigned point_boundary_index(const block_info* block, const boundary_id id, const unsigned idx)
+INTERNAL_MODULE_FUNCTION
+unsigned point_boundary_index(const block_info* block, const boundary_id id, const unsigned idx)
 {
     //  There is a flip that should be done
     switch (id)
@@ -274,7 +274,8 @@ static inline unsigned point_boundary_index(const block_info* block, const bound
     return 0;
 }
 
-static inline unsigned point_boundary_index_flipped(const block_info* block, const boundary_id id, const unsigned idx)
+INTERNAL_MODULE_FUNCTION
+unsigned point_boundary_index_flipped(const block_info* block, const boundary_id id, const unsigned idx)
 {
     //  There is a flip that should be done
     switch (id)
@@ -291,7 +292,8 @@ static inline unsigned point_boundary_index_flipped(const block_info* block, con
     return 0;
 }
 
-static inline unsigned line_boundary_index(const block_info* block, const boundary_id id, const unsigned idx)
+INTERNAL_MODULE_FUNCTION
+unsigned line_boundary_index(const block_info* block, const boundary_id id, const unsigned idx)
 {
     switch (id)
     {
@@ -307,7 +309,8 @@ static inline unsigned line_boundary_index(const block_info* block, const bounda
     return 0;
 }
 
-static inline unsigned line_boundary_index_reverse(const block_info* block, const boundary_id id, const unsigned idx)
+INTERNAL_MODULE_FUNCTION
+unsigned line_boundary_index_reverse(const block_info* block, const boundary_id id, const unsigned idx)
 {
     switch (id)
     {
@@ -321,6 +324,178 @@ static inline unsigned line_boundary_index_reverse(const block_info* block, cons
         return block->n1 * (block->n2 - 1) + (block->n1 - 1) * (block->n2 - 1) + (block->n1 - 2 - idx); //    From 0 to block->n1 - 1
     }
     return 0;
+}
+
+INTERNAL_MODULE_FUNCTION
+unsigned surface_boundary_index(const block_info* block, const boundary_id id, const unsigned idx)
+{
+    //  There is a flip that should be done
+    switch (id)
+    {
+    case BOUNDARY_ID_SOUTH:
+        assert((int)idx >= 0 && (int)idx < (int)(block->n2 - 1));
+        return idx; //  from 0 to block->n2 - 1
+    case BOUNDARY_ID_NORTH:
+        assert((int)idx >= 0 && (int)idx < (int)(block->n2 - 1));
+        return (block->n2 - 1) * (block->n1 - 1) - (idx + 1); //  from 0 to block->n2 - 1
+    case BOUNDARY_ID_WEST:
+        assert((int)idx >= 0 && (int)idx < (int)(block->n1 - 1));
+        return (block->n2 - 1) * (block->n1 - 2 - idx); //  from 0 to block->n1 - 1
+    case BOUNDARY_ID_EAST:
+        assert((int)idx >= 0 && (int)idx < (int)(block->n1 - 1));
+        return idx * (block->n2 - 1) + block->n2 - 2; //  from 0 to block->n1 - 1
+    }
+    return 0;
+}
+
+static inline geo_id find_adjacent_surface(const block_info* infos, unsigned* p_block_id, geo_id surface_id, boundary_id neighbour)
+{
+    const unsigned block_id = *p_block_id;
+    const unsigned local_id = surface_id - infos[block_id].surfaces[0];
+    const div_t coords_pack = div(local_id,infos[block_id].n2 - 1);
+    const unsigned base_row = (unsigned)coords_pack.quot;
+    const unsigned base_col = (unsigned)coords_pack.rem;
+
+    switch (neighbour)
+    {
+    case BOUNDARY_ID_EAST:
+        if (base_col == infos[block_id].n2 - 2)
+        {
+            if (infos[block_id].boundaries[BOUNDARY_ID_EAST-1].id == ~0u)
+            {
+                return INVALID_SURFACE;
+            }
+
+            unsigned iother = infos[block_id].boundaries[BOUNDARY_ID_EAST-1].index;
+            *p_block_id = iother;
+            unsigned idx = surface_boundary_index(infos + iother, infos[block_id].boundaries[BOUNDARY_ID_EAST-1].id, infos[block_id].n1 - 2 - base_row);//  + 1;
+            return infos[iother].surfaces[idx];
+        }
+        return infos[block_id].surfaces[local_id+1];
+    case BOUNDARY_ID_WEST:
+        if (base_col == 0)
+        {
+            if (infos[block_id].boundaries[BOUNDARY_ID_WEST-1].id == ~0u)
+            {
+                return INVALID_SURFACE;
+            }
+
+            unsigned iother = infos[block_id].boundaries[BOUNDARY_ID_WEST-1].index;
+            *p_block_id = iother;
+            unsigned idx = surface_boundary_index(infos + iother, infos[block_id].boundaries[BOUNDARY_ID_WEST-1].id, infos[block_id].n1 - 2 - base_row);// + 1;
+            return infos[iother].surfaces[idx];
+        }
+        return infos[block_id].surfaces[local_id-1];
+    case BOUNDARY_ID_NORTH:
+        if (base_row == infos[block_id].n1 - 2)
+        {
+            if (infos[block_id].boundaries[BOUNDARY_ID_NORTH-1].id == ~0u)
+            {
+                return INVALID_SURFACE;
+            }
+            unsigned iother = infos[block_id].boundaries[BOUNDARY_ID_NORTH-1].index;
+            *p_block_id = iother;
+            unsigned idx = surface_boundary_index(infos + iother, infos[block_id].boundaries[BOUNDARY_ID_NORTH-1].id, infos[block_id].n2 - 2 - base_col);//  + 1;
+            return infos[iother].surfaces[idx];
+        }
+        return infos[block_id].surfaces[local_id+infos[block_id].n2-1];
+    case BOUNDARY_ID_SOUTH:
+        if (base_row == 0)
+        {
+            if (infos[block_id].boundaries[BOUNDARY_ID_SOUTH-1].id == ~0u)
+            {
+                return INVALID_SURFACE;
+            }
+
+            unsigned iother = infos[block_id].boundaries[BOUNDARY_ID_SOUTH-1].index;
+            *p_block_id = iother;
+            unsigned idx = surface_boundary_index(infos + iother, infos[block_id].boundaries[BOUNDARY_ID_SOUTH-1].id, infos[block_id].n2 - 2 - base_col);//  + 1;
+            return infos[iother].surfaces[idx];
+        }
+        return infos[block_id].surfaces[local_id-(infos[block_id].n2-1)];
+    }
+    return INVALID_SURFACE;
+}
+
+error_id surface_centered_element(const mesh2d* mesh, geo_id surface_id, unsigned order, geo_id out[(2 * order + 1)*(2 * order + 1)])
+{
+    if (order == 0)
+    {
+        *out = surface_id;
+        return MESH_SUCCESS;
+    }
+    const geo_id absolute_id = abs(surface_id);
+    const block_info* bi = mesh->block_info;
+    geo_id local_pos = -1;
+    unsigned iblk;
+    for (iblk = 0; iblk < mesh->n_blocks; ++iblk)
+    {
+        const block_info* info = bi + iblk;
+        local_pos = absolute_id - info->surfaces[0];
+        //  Surface can't be in the block
+        if (local_pos >= 0 || local_pos < (int)((info->n1 - 1) * (info->n2 - 1)))
+        {
+            break;
+        }
+    }
+    if (iblk == mesh->n_blocks)
+    {
+        return MESH_INDEX_OUT_OF_BOUNDS;
+    }
+    // const div_t coords_pack = div(local_pos, bi[iblk].n2);
+    // const int base_row = (int)coords_pack.quot;
+    // const int base_col = (int)coords_pack.rem;
+
+    static const boundary_id move_directions[BOUNDARY_COUNT] = {BOUNDARY_ID_SOUTH, BOUNDARY_ID_EAST, BOUNDARY_ID_NORTH, BOUNDARY_ID_WEST};
+    const int move_offset[BOUNDARY_COUNT] = {-(2 * order + 1), +1, +(2 * order + 1), -1};
+    static const boundary_id search_directions[BOUNDARY_COUNT] = {BOUNDARY_ID_EAST, BOUNDARY_ID_NORTH, BOUNDARY_ID_WEST, BOUNDARY_ID_SOUTH};
+    const int search_offset[BOUNDARY_COUNT] = {+1, +(2 * order + 1), -1, -(2 * order + 1), };
+    const unsigned center = (2 * order + 1) * order + order;
+    //  Middle of array
+    out[center] = absolute_id;
+    for (unsigned i = 0; i < BOUNDARY_COUNT; ++i)
+    {
+        const boundary_id move = move_directions[i];
+        const int mo = move_offset[i];
+        const boundary_id search = search_directions[i];
+        const int so = search_offset[i];
+        unsigned block = iblk;
+        geo_id surf = absolute_id;
+        for (unsigned j = 0; j < order; ++j)
+        {
+            geo_id new_surf;
+            if (surf != INVALID_SURFACE)
+            {
+                new_surf = find_adjacent_surface(bi, &block, surf, move);
+                // printf("Block %d borders on %d on %s\n", surf, new_surf, boundary_id_to_str(move));
+            }
+            else
+            {
+                new_surf = surf;
+            }
+            out[center + (j + 1) * mo] = new_surf;
+            surf = new_surf;
+            unsigned new_block = block;
+            for (unsigned k = 0; k < order; ++k)
+            {
+                geo_id new_new_surf;
+                if (new_surf != INVALID_SURFACE)
+                {
+                    new_new_surf = find_adjacent_surface(bi, &new_block, new_surf, search);
+                    // printf("Block %d borders on %d on %s\n", new_surf, new_new_surf, boundary_id_to_str(search));
+                    // new_surf = new_new_surf;
+                }
+                else
+                {
+                    new_new_surf = new_surf;
+                }
+                out[center + (j + 1) * mo + (k + 1) * so] = new_new_surf;
+                new_surf = new_new_surf;
+            }
+        }
+    }
+
+    return MESH_SUCCESS;
 }
 
 static inline void deal_with_line_boundary(const boundary_block* boundary, const block_info* info_owner, const block_info* info_target)
@@ -484,7 +659,6 @@ static error_id generate_mesh2d_from_geometry(unsigned n_blocks, mesh2d_block* b
                 b->bnorth.block = (boundary_block){.n = b->bnorth.n, .owner = i, .owner_id = BOUNDARY_ID_NORTH, .target = j, .target_id = bid};
             }
         }
-
         if (b->bsouth.type == BOUNDARY_TYPE_CURVE)
         {
             const boundary_curve* bc = &b->bsouth.curve;
@@ -597,6 +771,20 @@ static error_id generate_mesh2d_from_geometry(unsigned n_blocks, mesh2d_block* b
             }
         }
 
+    }
+    for (unsigned i = 0; i < n_blocks; ++i)
+    {
+        const mesh2d_block* b = blocks + i;
+        block_info* bi = info + i;
+        for (unsigned j = 0; j < BOUNDARY_COUNT; ++j)
+        {
+            const boundary* bnd = b->bnd_array + j;
+            if (bnd->type == BOUNDARY_TYPE_BLOCK)
+            {
+                bi->boundaries[j].id = bnd->block.target_id;
+                bi->boundaries[j].index = bnd->block.target;
+            }
+        }
     }
     
     for (unsigned i = 0; i < n_blocks; ++i)
@@ -746,7 +934,7 @@ static error_id generate_mesh2d_from_geometry(unsigned n_blocks, mesh2d_block* b
                 geo_id lft = (geo_id)(bi->lines[bi->n1 * (bi->n2 - 1) + row + col * (bi->n1 - 1)]);
                 geo_id rgt = (geo_id)(bi->lines[bi->n1 * (bi->n2 - 1) + row + (col + 1) * (bi->n1 - 1)]);
                 assert(surf_count < args.max_surfaces);
-                bi->surfaces[col + row*(bi->n2 - 1)] = (geo_id)surf_count;
+                bi->surfaces[col + row*(bi->n2 - 1)] = (geo_id)(surf_count + 1);
                 surfaces[surf_count] = (surface){.lines = +btm, .linee = +rgt, .linen = -top, .linew = -lft};
                 surf_count += 1;
             }
@@ -802,6 +990,7 @@ static inline error_id check_boundary_consistency(const mesh2d_block* blocks, co
     return MESH_SUCCESS;
 }
 
+INTERNAL_MODULE_FUNCTION
 error_id mesh2d_check_blocks(unsigned n_blocks, const mesh2d_block* blocks)
 {
     error_id ret = MESH_SUCCESS;
@@ -828,6 +1017,7 @@ error_id mesh2d_check_blocks(unsigned n_blocks, const mesh2d_block* blocks)
     return ret;
 }
 
+INTERNAL_MODULE_FUNCTION
 error_id mesh2d_create_elliptical(unsigned n_blocks, mesh2d_block* blocks, const solver_config* cfg, allocator* allocator, mesh2d* p_out, double* rx, double* ry)
 {
     jmtx_allocator_callbacks allocator_callbacks =
@@ -882,6 +1072,11 @@ error_id mesh2d_create_elliptical(unsigned n_blocks, mesh2d_block* blocks, const
         if (iblk != n_blocks - 1)
         {
             block_offsets[iblk + 1] = npts + block_offsets[iblk];
+        }
+        for (unsigned i = 0; i < BOUNDARY_COUNT; ++i)
+        {
+            info[iblk].boundaries[i].id = (boundary_id)BOUNDARY_ID_INVALID;
+            info[iblk].boundaries[i].index = INVALID_BLOCK;
         }
         point_cnt += npts;
         max_lines += (n1 - 1) * n2 + n1 * (n2 - 1);
@@ -1260,7 +1455,7 @@ cleanup_matrix:
     return ret;
 }
 
-
+INTERNAL_MODULE_FUNCTION
 void mesh_destroy(mesh2d* mesh, allocator* allocator)
 {
     allocator->free(allocator, mesh->p_x);
@@ -1274,6 +1469,7 @@ void mesh_destroy(mesh2d* mesh, allocator* allocator)
     allocator->free(allocator, mesh->block_info);
 }
 
+INTERNAL_MODULE_FUNCTION
 error_id mesh2d_get_boundary_lines_info(
     const mesh2d* mesh, unsigned block, boundary_id boundary,
     const geo_id** p_first, unsigned* p_count, int* p_stride)
@@ -1305,6 +1501,7 @@ error_id mesh2d_get_boundary_lines_info(
     return MESH_SUCCESS;
 }
 
+INTERNAL_MODULE_FUNCTION
 error_id mesh2d_get_boundary_points_info(
     const mesh2d* mesh, unsigned block, boundary_id boundary, const geo_id** p_first, unsigned* p_count, int* p_stride)
 {
@@ -1343,6 +1540,7 @@ error_id mesh2d_get_boundary_points_info(
     return MESH_SUCCESS;
 }
 
+INTERNAL_MODULE_FUNCTION
 error_id mesh2d_get_boundary_surface_info(
     const mesh2d* mesh, unsigned block, boundary_id boundary,
     const geo_id** p_first, unsigned* p_count, int* p_stride)

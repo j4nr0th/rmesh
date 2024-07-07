@@ -25,10 +25,16 @@ list(APPEND MESH_FILES
         src/err.c
         src/err.h
         src/io.c
-        src/io.h)
+        src/io.h
+        src/defines.h)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 add_subdirectory(jmtx)
 set_property(TARGET jmtx PROPERTY POSITION_INDEPENDENT_CODE ON)
+
+if (NOT DEFINED SKBUILD)
+    enable_testing()
+endif ()
+
 add_executable(mesh tests/first_test.c ${MESH_FILES})
 target_compile_options(mesh PRIVATE -Wall -Werror -Wextra)
 target_link_libraries(mesh PRIVATE jmtx)
@@ -38,6 +44,12 @@ add_executable(bigger_test tests/bigger_test.c ${MESH_FILES})
 target_compile_options(bigger_test PRIVATE -Wall -Werror -Wextra)
 target_link_libraries(bigger_test PRIVATE jmtx)
 target_include_directories(bigger_test PRIVATE jmtx/include)
+
+add_executable(adjacent_test tests/adjacent_test.c ${MESH_FILES})
+target_compile_options(adjacent_test PRIVATE -Wall -Werror -Wextra)
+target_link_libraries(adjacent_test PRIVATE jmtx)
+target_include_directories(adjacent_test PRIVATE jmtx/include)
+
 python_add_library(_rmsh MODULE ${MESH_FILES} src/core.c WITH_SOABI USE_SABI 3.10)
 target_include_directories(_rmsh PRIVATE jmtx/include ${Python_INCLUDE_DIRS} ${NumPy_INCLUDE_DIRS})
 target_link_libraries(_rmsh PRIVATE jmtx)
