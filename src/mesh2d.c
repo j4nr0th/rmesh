@@ -498,6 +498,132 @@ error_id surface_centered_element(const mesh2d* mesh, geo_id surface_id, unsigne
     return MESH_SUCCESS;
 }
 
+static inline geo_id surface_sw_point(const mesh2d* mesh, const geo_id surface)
+{
+    if (surface == INVALID_SURFACE)
+    {
+        return INVALID_POINT;
+    }
+    const unsigned surface_idx = abs(surface) - 1;
+    const geo_id s_line = mesh->p_surfaces[surface_idx].lines;
+    const unsigned line_idx = abs(s_line) - 1;
+    geo_id end_pt;
+    if (s_line * surface > 0) // Orientation not reversed
+    {
+        end_pt = mesh->p_lines[line_idx].pt1;
+    }
+    else // Orientation not reversed
+    {
+        end_pt = mesh->p_lines[line_idx].pt2;
+    }
+    return end_pt;
+}
+static inline geo_id surface_se_point(const mesh2d* mesh, const geo_id surface)
+{
+    if (surface == INVALID_SURFACE)
+    {
+        return INVALID_POINT;
+    }
+    const unsigned surface_idx = abs(surface) - 1;
+    const geo_id s_line = mesh->p_surfaces[surface_idx].lines;
+    const unsigned line_idx = abs(s_line) - 1;
+    geo_id end_pt;
+    if (s_line * surface > 0) // Orientation not reversed
+    {
+        end_pt = mesh->p_lines[line_idx].pt2;
+    }
+    else // Orientation not reversed
+    {
+        end_pt = mesh->p_lines[line_idx].pt1;
+    }
+    return end_pt;
+}
+static inline geo_id surface_nw_point(const mesh2d* mesh, const geo_id surface)
+{
+    if (surface == INVALID_SURFACE)
+    {
+        return INVALID_POINT;
+    }
+    const unsigned surface_idx = abs(surface) - 1;
+    const geo_id n_line = mesh->p_surfaces[surface_idx].linen;
+    const unsigned line_idx = abs(n_line) - 1;
+    geo_id end_pt;
+    if (n_line * surface > 0) // Orientation not reversed
+    {
+        end_pt = mesh->p_lines[line_idx].pt2;
+    }
+    else // Orientation not reversed
+    {
+        end_pt = mesh->p_lines[line_idx].pt1;
+    }
+    return end_pt;
+}
+static inline geo_id surface_ne_point(const mesh2d* mesh, const geo_id surface)
+{
+    if (surface == INVALID_SURFACE)
+    {
+        return INVALID_POINT;
+    }
+    const unsigned surface_idx = abs(surface) - 1;
+    const geo_id n_line = mesh->p_surfaces[surface_idx].linen;
+    const unsigned line_idx = abs(n_line) - 1;
+    geo_id end_pt;
+    if (n_line * surface > 0) // Orientation not reversed
+    {
+        end_pt = mesh->p_lines[line_idx].pt1;
+    }
+    else // Orientation not reversed
+    {
+        end_pt = mesh->p_lines[line_idx].pt2;
+    }
+    return end_pt;
+}
+
+error_id surface_centered_element_points(const mesh2d* mesh, geo_id surface_id, unsigned order, geo_id out[(2 * order + 2)*(2 * order + 2)])
+{
+    const error_id r = surface_centered_element(mesh, surface_id, order, out);
+    if (r != MESH_SUCCESS)
+    {
+        return r;
+    }
+    unsigned len_in = (2 * order + 1) * (2 * order + 1);
+    unsigned len_todo = (2 * order + 2) * (2 * order + 2);
+    //  Write the last row
+    for (unsigned i = 0; i < 2 * order + 1; ++i)
+    {
+        out[len_todo - 1] = surface_ne_point(mesh, out[len_in - 1 - i]);
+        // len_in -= 1;
+        len_todo -= 1;
+        assert(len_todo >= len_in);
+    }
+    //  Don't forget the NW corner
+    out[len_todo - 1] = surface_nw_point(mesh, out[len_in - 2 * order - 1]);
+    len_todo -= 1;
+    assert(len_todo >= len_in);
+
+    //  Now do the actual rows
+    for (unsigned row = 2 * order + 1; row > 0; --row)
+    {
+        //  First add the SE corner
+        out[len_todo - 1] = surface_se_point(mesh, out[len_in - 1]);
+        len_todo -= 1;
+        assert(len_todo >= len_in);
+
+        //  Now add all the others
+        for (unsigned col = 2 * order + 1; col > 0; --col)
+        {
+            assert(len_todo >= len_in);
+            out[len_todo - 1] = surface_sw_point(mesh, out[len_in - 1]);
+            len_todo -= 1;
+            len_in -= 1;
+        }
+    }
+    assert(len_in == 0);
+    assert(len_todo == 0);
+
+    return MESH_SUCCESS;
+}
+
 static inline void deal_with_line_boundary(const boundary_block* boundary, const block_info* info_owner, const block_info* info_target)
 {
     //  When this is 1 we reverse, when it's -1 we do not

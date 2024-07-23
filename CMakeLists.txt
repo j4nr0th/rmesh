@@ -50,6 +50,11 @@ target_compile_options(adjacent_test PRIVATE -Wall -Werror -Wextra)
 target_link_libraries(adjacent_test PRIVATE jmtx)
 target_include_directories(adjacent_test PRIVATE jmtx/include)
 
+add_executable(adjacent_test2 tests/adjacent_test2.c ${MESH_FILES})
+target_compile_options(adjacent_test2 PRIVATE -Wall -Werror -Wextra)
+target_link_libraries(adjacent_test2 PRIVATE jmtx)
+target_include_directories(adjacent_test2 PRIVATE jmtx/include)
+
 python_add_library(_rmsh MODULE ${MESH_FILES} src/core.c WITH_SOABI USE_SABI 3.10)
 target_include_directories(_rmsh PRIVATE jmtx/include ${Python_INCLUDE_DIRS} ${NumPy_INCLUDE_DIRS})
 target_link_libraries(_rmsh PRIVATE jmtx)

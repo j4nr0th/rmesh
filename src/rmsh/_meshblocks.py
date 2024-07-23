@@ -224,6 +224,28 @@ class Mesh2D:
         """
         return self._internal.surface_element(surf, order)
 
+    def surface_element_points(self, surf: int|np.ndarray, order: int) -> np.ndarray:
+        """Returns the indices of points, which form a square element of width (2 * order + 1) surfaces. This is
+        intended to be used for computing nodal-based interpolations for surface elements.
+
+        Parameters
+        ----------
+        surf : int
+            The one-based index of the surface which should be the center of the element.
+        order : int
+            Size of the element in each direction away from the center (zero means only the element, one means 3 x 3,
+             etc.)
+
+        Returns
+        ----------
+        ndarray[int32]
+            Array with indices of all indices in the element. Note that since one-based indexing is used, a value of -1
+            indicates a missing point caused by a numerical boundary.
+        """
+        return self._internal.surface_element_points(surf, order)
+
+
+
 
 def _find_boundary_size(bnd: BoundaryBlock, blcks: dict[str, tuple[int, MeshBlock]]):
     if type(bnd) is BoundaryCurve:

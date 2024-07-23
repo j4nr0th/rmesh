@@ -138,6 +138,9 @@ INTERNAL_MODULE_FUNCTION
 error_id surface_centered_element(const mesh2d* mesh, geo_id surface_id, unsigned order, geo_id out[(2 * order + 1)*(2 * order + 1)]);
 
 INTERNAL_MODULE_FUNCTION
+error_id surface_centered_element_points(const mesh2d* mesh, geo_id surface_id, unsigned order, geo_id out[(2 * order + 2)*(2 * order + 2)]);
+
+INTERNAL_MODULE_FUNCTION
 error_id line_centered_element(const mesh2d* mesh, geo_id line_id, unsigned order, geo_id out[2 * order + 1]);
 
 #endif //MESH_MESH_H

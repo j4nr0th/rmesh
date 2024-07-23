@@ -330,6 +330,35 @@ static PyObject* mesh_surface_element(PyObject* self, PyObject* v)
     return arr;
 }
 
+static PyObject* mesh_surface_element_points(PyObject* self, PyObject* v)
+{
+    int surface_id;
+    unsigned order;
+    if (!PyArg_ParseTuple(v, "iI", &surface_id, &order))
+    {
+        return NULL;
+    }
+    PyMesh2dObject* this = (PyMesh2dObject*)self;
+    npy_intp dims[2] = {(2 * order + 2), (2 * order + 2)};
+
+
+    PyObject* arr = PyArray_New(&PyArray_Type, 2, dims, NPY_INT32, NULL, NULL, 0, 0, NULL);
+    if (!arr)
+    {
+        return NULL;
+    }
+    static_assert(sizeof(npy_int32) == sizeof(geo_id));
+    geo_id* out_array = PyArray_DATA((PyArrayObject*)arr);
+    const error_id res = surface_centered_element_points(&this->data, (geo_id)surface_id, order, out_array);
+    if (res != MESH_SUCCESS)
+    {
+        Py_DECREF(arr);
+        return PyErr_Format(PyExc_RuntimeError, "Could not create the surface element of order %u centered on index %d (error code %u)", order, surface_id, res);
+        return NULL;
+    }
+    return arr;
+}
+
 static PyGetSetDef mesh_getset[] =
     {
         {"x", mesh_getx, NULL, "X coordinates of nodes", NULL},
@@ -346,6 +375,7 @@ static PyMethodDef mesh_methods[] =
         {.ml_name = "boundary_pts", .ml_meth = mesh_boundary_points, .ml_flags = METH_VARARGS, .ml_doc = "Retrieves point indices for a specified boundary of a block"},
         {.ml_name = "boundary_surf", .ml_meth = mesh_boundary_surfaces, .ml_flags = METH_VARARGS, .ml_doc = "Retrieves surface indices for a specified boundary of a block"},
         {.ml_name = "surface_element", .ml_meth = mesh_surface_element, .ml_flags = METH_VARARGS, .ml_doc = "Returns indices of surfaces for a surface element"},
+        {.ml_name = "surface_element_points", .ml_meth = mesh_surface_element_points, .ml_flags = METH_VARARGS, .ml_doc = "Returns indices of indices for a surface element"},
         {NULL}  //  Sentinel
     };
 
