@@ -1107,7 +1107,7 @@ static inline error_id check_boundary_consistency(const mesh2d_block* blocks, co
     }
     if (other->n != bnd->n)
     {
-        return MESH_BOUNDARY_POINT_COUNT_MISMATCH;
+        return MESH_BOUNDARY_SIZE_MISMATCH;
     }
     if (other->type == BOUNDARY_TYPE_CURVE && (unsigned)bnd->target >= idx)
     {

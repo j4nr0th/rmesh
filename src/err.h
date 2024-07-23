@@ -14,9 +14,14 @@ enum error_id_enum
     MESH_MATRIX_FAILURE,
     MESH_SOLVER_FAILED,
     MESH_INVALID_BOUNDARY_ID,
-    MESH_BOUNDARY_POINT_COUNT_MISMATCH,
     MESH_BOUNDARY_UNSORTED,
     MESH_INDEX_OUT_OF_BOUNDS,
+    MESH_COUNT,
 };
+
+
+const char* error_id_to_str(error_id id);
+
+const char* error_id_to_msg(error_id id);
 
 #endif //MESH_ERR_H

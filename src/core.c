@@ -13,6 +13,7 @@
 
 #include "geometry.h"
 #include "mesh2d.h"
+#include "err.h"
 
 
 //  Mesh type Python interface
@@ -182,7 +183,7 @@ static PyObject* mesh_boundary_lines(PyObject* self, PyObject* v)
     error_id res = mesh2d_get_boundary_lines_info(&this->data, block_idx, id, &first, &cnt, &stride);
     if (res != MESH_SUCCESS)
     {
-        return PyErr_Format(PyExc_RuntimeError, "Failed to retrieve block line info (error code %d)", res);
+        return PyErr_Format(PyExc_RuntimeError, "Failed to retrieve block line info (%s: %s)", error_id_to_str(res), error_id_to_msg(res));
     }
     npy_intp dims = cnt;
     npy_intp strides = sizeof(*first)*stride;
@@ -233,7 +234,7 @@ static PyObject* mesh_boundary_points(PyObject* self, PyObject* v)
     error_id res = mesh2d_get_boundary_points_info(&this->data, block_idx, id, &first, &cnt, &stride);
     if (res != MESH_SUCCESS)
     {
-        return PyErr_Format(PyExc_RuntimeError, "Failed to retrieve block line info (error code %d)", res);
+        return PyErr_Format(PyExc_RuntimeError, "Failed to retrieve block line info (%s: %s)", error_id_to_str(res), error_id_to_msg(res));
     }
     npy_intp dims = cnt;
     npy_intp strides = sizeof(*first)*stride;
@@ -283,7 +284,7 @@ static PyObject* mesh_boundary_surfaces(PyObject* self, PyObject* v)
     error_id res = mesh2d_get_boundary_surface_info(&this->data, block_idx, id, &first, &cnt, &stride);
     if (res != MESH_SUCCESS)
     {
-        return PyErr_Format(PyExc_RuntimeError, "Failed to retrieve block line info (error code %d)", res);
+        return PyErr_Format(PyExc_RuntimeError, "Failed to retrieve block line info (%s: %s)", error_id_to_str(res), error_id_to_msg(res));
     }
     npy_intp dims = cnt;
     npy_intp strides = sizeof(*first)*stride;
@@ -324,8 +325,7 @@ static PyObject* mesh_surface_element(PyObject* self, PyObject* v)
     if (res != MESH_SUCCESS)
     {
         Py_DECREF(arr);
-        return PyErr_Format(PyExc_RuntimeError, "Could not create the surface element of order %u centered on index %d (error code %u)", order, surface_id, res);
-        return NULL;
+        return PyErr_Format(PyExc_RuntimeError, "Could not create the surface element of order %u centered on index %d (%s: %s)", order, surface_id, error_id_to_str(res), error_id_to_msg(res));
     }
     return arr;
 }
@@ -353,8 +353,7 @@ static PyObject* mesh_surface_element_points(PyObject* self, PyObject* v)
     if (res != MESH_SUCCESS)
     {
         Py_DECREF(arr);
-        return PyErr_Format(PyExc_RuntimeError, "Could not create the surface element of order %u centered on index %d (error code %u)", order, surface_id, res);
-        return NULL;
+        return PyErr_Format(PyExc_RuntimeError, "Could not create the surface element of order %u centered on index %d (%s %s)", order, surface_id, error_id_to_str(res), error_id_to_msg(res));
     }
     return arr;
 }
@@ -608,7 +607,7 @@ static PyObject* rmsh_create_mesh_function(PyObject* self, PyObject* args)
     if (e != MESH_SUCCESS)
     {
         Py_DECREF(msh);
-        return PyErr_Format(PyExc_RuntimeError, "Failed mesh creation (error code %u)", (unsigned)e);
+        return PyErr_Format(PyExc_RuntimeError, "Failed mesh creation (%s: %s)", error_id_to_str(e), error_id_to_msg(e));
     }
     PyObject* ox = PyFloat_FromDouble(rx);
     if (!ox)

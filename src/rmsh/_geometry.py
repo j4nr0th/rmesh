@@ -5,6 +5,7 @@ from enum import Enum, unique
 
 INVALID_POINT_IDX = -1
 INVALID_LINE_IDX = 0
+INVALID_SURFACE_IDX = 0
 
 
 @dataclass(frozen=True)
