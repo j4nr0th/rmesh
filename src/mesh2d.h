@@ -10,6 +10,12 @@
 #include "err.h"
 #include "defines.h"
 
+#ifndef _MSC_BUILD
+    #define _RMSH_ARRAY_ATTRIB(x) x
+#else
+    #define _RMSH_ARRAY_ATTRIB(x)
+#endif
+
 typedef struct line_struct line;
 struct line_struct
 {
@@ -135,12 +141,12 @@ INTERNAL_MODULE_FUNCTION
 unsigned surface_boundary_index(const block_info* block, const boundary_id id, const unsigned idx);
 
 INTERNAL_MODULE_FUNCTION
-error_id surface_centered_element(const mesh2d* mesh, geo_id surface_id, unsigned order, geo_id out[(2 * order + 1)*(2 * order + 1)]);
+error_id surface_centered_element(const mesh2d* mesh, geo_id surface_id, unsigned order, geo_id out[_RMSH_ARRAY_ATTRIB((2 * order + 1)*(2 * order + 1))]);
 
 INTERNAL_MODULE_FUNCTION
-error_id surface_centered_element_points(const mesh2d* mesh, geo_id surface_id, unsigned order, geo_id out[(2 * order + 2)*(2 * order + 2)]);
+error_id surface_centered_element_points(const mesh2d* mesh, geo_id surface_id, unsigned order, geo_id out[_RMSH_ARRAY_ATTRIB((2 * order + 2)*(2 * order + 2))]);
 
 INTERNAL_MODULE_FUNCTION
-error_id line_centered_element(const mesh2d* mesh, geo_id line_id, unsigned order, geo_id out[2 * order + 1]);
+error_id line_centered_element(const mesh2d* mesh, geo_id line_id, unsigned order, geo_id out[_RMSH_ARRAY_ATTRIB(2 * order + 1)]);
 
 #endif //MESH_MESH_H

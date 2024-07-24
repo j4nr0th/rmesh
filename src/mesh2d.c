@@ -108,8 +108,8 @@ enum {DIRECT_SOLVER_LIMIT = (1 << 12), GOD_HELP_ME = (1 << 20), GMRESR_MLIM = (1
 
 
 static inline jmtx_result solve_the_system_of_equations(const unsigned npts, const jmtxd_matrix_crs* mat,
-    double xrhs[const restrict static npts], double yrhs[const restrict static npts],
-    double out_x[const restrict npts], double out_y[const restrict npts], allocator* allocator, const jmtx_allocator_callbacks* allocator_callbacks, const solver_config* cfg, double* rx, double* ry)
+    double xrhs[_RMSH_ARRAY_ATTRIB(const restrict static npts)], double yrhs[_RMSH_ARRAY_ATTRIB(const restrict static npts)],
+    double out_x[_RMSH_ARRAY_ATTRIB(const restrict npts)], double out_y[_RMSH_ARRAY_ATTRIB(const restrict npts)], allocator* allocator, const jmtx_allocator_callbacks* allocator_callbacks, const solver_config* cfg, double* rx, double* ry)
 {
     jmtx_result res = JMTX_RESULT_SUCCESS;
     jmtx_result r1 = JMTX_RESULT_SUCCESS, r2 = JMTX_RESULT_SUCCESS;
@@ -417,7 +417,7 @@ static inline geo_id find_adjacent_surface(const block_info* infos, unsigned* p_
     return INVALID_SURFACE;
 }
 
-error_id surface_centered_element(const mesh2d* mesh, geo_id surface_id, unsigned order, geo_id out[(2 * order + 1)*(2 * order + 1)])
+error_id surface_centered_element(const mesh2d* mesh, geo_id surface_id, unsigned order, geo_id out[_RMSH_ARRAY_ATTRIB((2 * order + 1)*(2 * order + 1))])
 {
     if (order == 0)
     {
@@ -579,7 +579,7 @@ static inline geo_id surface_ne_point(const mesh2d* mesh, const geo_id surface)
     return end_pt;
 }
 
-error_id surface_centered_element_points(const mesh2d* mesh, geo_id surface_id, unsigned order, geo_id out[(2 * order + 2)*(2 * order + 2)])
+error_id surface_centered_element_points(const mesh2d* mesh, geo_id surface_id, unsigned order, geo_id out[_RMSH_ARRAY_ATTRIB((2 * order + 2)*(2 * order + 2))])
 {
     const error_id r = surface_centered_element(mesh, surface_id, order, out);
     if (r != MESH_SUCCESS)
