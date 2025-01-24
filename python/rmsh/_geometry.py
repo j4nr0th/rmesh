@@ -1,7 +1,7 @@
 from dataclasses import dataclass
-import numpy as np
 from enum import Enum, unique
 
+import numpy as np
 
 INVALID_POINT_IDX = -1
 INVALID_LINE_IDX = 0
@@ -10,25 +10,30 @@ INVALID_SURFACE_IDX = 0
 
 @dataclass(frozen=True)
 class Line:
-    """ Defines a line in terms of its topology. Each line should have a positive orientation.
-    Values of `p1` and `p2` are indices of the nodes in the mesh.
+    """Defines a line in terms of its topology.
 
-    Attributes
+    Each line should have a positive orientation. Values of `p1` and `p2` are indices of
+    the nodes in the mesh.
+
+    Parameters
     ----------
     p1 : int
         Index of the first point.
     p2 : int
         Index of the second point.
     """
+
     p1: int = -1
     p2: int = -1
 
 
 @dataclass(frozen=True)
 class Surface:
-    """Mesh surface defined in terms of its topology. Each surface should have a CCW orientation. Values of `l1`, `l2`,
-    `l3`, and `l4` are indices into the mesh line array, with 1 being the first element. Negative values indicate
-    reverse orientation.
+    """Mesh surface defined in terms of its topology.
+
+    Each surface should have a CCW orientation. Values of `l1`, `l2`,
+    `l3`, and `l4` are indices into the mesh line array, with 1 being the first element.
+    Negative values indicate reverse orientation.
 
     Attributes
     ----------
@@ -41,6 +46,7 @@ class Surface:
     l4 : int
         Index of the fourth line.
     """
+
     l1: int = 0
     l2: int = 0
     l3: int = 0
@@ -49,13 +55,15 @@ class Surface:
 
 @unique
 class BoundaryId(Enum):
-    """Enum used to identify sides of the mesh in terms of topology, independent to its geometry.
+    """Enum used to identify sides of the mesh in terms of topology.
+
     Valid values are:
         - BoundaryNorth
         - BoundaryEast
         - BoundaryWest
         - BoundarySouth
     """
+
     BoundarySouth = 1
     BoundaryEast = 2
     BoundaryNorth = 3
@@ -73,9 +81,10 @@ class BoundaryBlock:
     target_id : BoundaryId
         ID of the boundary of `target` to which this boundary will connect to.
     n : int = 0
-        The number of points along this boundary, whill may be left as 0 if the value can be inferred from other
-        boundaries this one has to match to.
+        The number of points along this boundary, may be left as 0 if the value can
+        be inferred from other boundaries this one has to match to.
     """
+
     target: str
     target_id: BoundaryId
     n: int = 0
@@ -92,5 +101,15 @@ class BoundaryCurve:
     y : ndarray[float64]
         Values of Y coordinate along the boundary.
     """
+
     x: np.ndarray
     y: np.ndarray
+
+
+_SolverCfgTuple = tuple[bool, float, int, int, int]
+_BoundaryInfoTuple = (
+    tuple[int, int, int, np.ndarray, np.ndarray] | tuple[int, int, int, int, int]
+)
+_BlockInfoTuple = tuple[
+    str, _BoundaryInfoTuple, _BoundaryInfoTuple, _BoundaryInfoTuple, _BoundaryInfoTuple
+]

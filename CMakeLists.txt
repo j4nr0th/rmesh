@@ -8,23 +8,15 @@ endif()
 set(CMAKE_C_STANDARD 99)
 
 #   Load Python package
-find_package(Python 3.10 COMPONENTS Interpreter Development.Module Development.SABIModule REQUIRED)
+find_package(Python COMPONENTS Interpreter Development.Module Development.SABIModule REQUIRED)
 #set(Python_NumPy_INCLUDE_DIRS "${CMAKE_SOURCE_DIR}/venv/lib/python3.12/site-packages/numpy/_core/include")
-if (WIN32)
+
 execute_process(
         COMMAND "${Python_EXECUTABLE}"
         -c "import numpy; print(numpy.get_include())"
         OUTPUT_VARIABLE NumPy_INCLUDE_DIRS
         OUTPUT_STRIP_TRAILING_WHITESPACE
 )
-else()
-execute_process(
-        COMMAND "${Python3_EXECUTABLE}"
-        -c "import numpy; print(numpy.get_include())"
-        OUTPUT_VARIABLE NumPy_INCLUDE_DIRS
-        OUTPUT_STRIP_TRAILING_WHITESPACE
-)
-endif()
 
 list(APPEND MESH_FILES
         src/geometry.h
@@ -65,7 +57,7 @@ if (NOT DEFINED SKBUILD)
 endif ()
 
 
-python_add_library(_rmsh MODULE ${MESH_FILES} src/core.c WITH_SOABI USE_SABI 3.10)
+python_add_library(_rmsh MODULE ${MESH_FILES} src/core.c WITH_SOABI)
 target_include_directories(_rmsh PRIVATE jmtx/include ${Python_INCLUDE_DIRS} ${NumPy_INCLUDE_DIRS})
 target_link_libraries(_rmsh PRIVATE jmtx)
 

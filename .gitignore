@@ -7,3 +7,5 @@ _skbuild/
 dist/
 venv2/
 .*/
+__pycache__/
+sandbox/
