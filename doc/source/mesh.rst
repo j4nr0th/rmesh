@@ -12,3 +12,4 @@ as possible to use.
 
 .. autoclass:: Mesh2D
     :members:
+    :inherited-members:
