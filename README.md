@@ -14,3 +14,8 @@ To build `rmesh`, [numpy](https://numpy.org), [CMake](https://cmake.org/), [scik
 3. Build the package wheel(s) using Python `python -m build <output-dir>`
 4. Install the package from the wheel with `pip install <output-dir>/rmesh-*.whl`
 
+## Documentation
+
+Built documentation is hosted using Github pages [here](https://j4nr0th.github.io/rmesh/). If you wish to build them yourself, you can do
+so by installing the package with optional dependency `[doc]` (for example, if you are in the source directory, call `pip install .[doc]`).
+Following that, you can build the documentation pages by calling `sphinx-build doc <out-dir>`.
