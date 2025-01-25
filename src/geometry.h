@@ -17,8 +17,7 @@ enum boundary_type_enum
     BOUNDARY_TYPE_BLOCK = 2,
 };
 typedef enum boundary_type_enum boundary_type;
-const char* boundary_type_to_str(boundary_type type);
-
+const char *boundary_type_to_str(boundary_type type);
 
 enum boundary_id_enum
 {
@@ -27,16 +26,23 @@ enum boundary_id_enum
     BOUNDARY_ID_NORTH = 3,
     BOUNDARY_ID_WEST = 4,
 };
-enum {BOUNDARY_COUNT = 4, INVALID_BLOCK = -1, BOUNDARY_ID_INVALID = -1, INVALID_POINT = -1, INVALID_LINE = 0, INVALID_SURFACE = 0};
+enum
+{
+    BOUNDARY_COUNT = 4,
+    INVALID_BLOCK = -1,
+    BOUNDARY_ID_INVALID = -1,
+    INVALID_POINT = -1,
+    INVALID_LINE = 0,
+    INVALID_SURFACE = 0
+};
 typedef enum boundary_id_enum boundary_id;
-const char* boundary_id_to_str(boundary_id id);
-
+const char *boundary_id_to_str(boundary_id id);
 
 struct boundary_curve_struct
 {
     unsigned n;
-    double* x;
-    double* y;
+    double *x;
+    double *y;
 };
 typedef struct boundary_curve_struct boundary_curve;
 
@@ -54,8 +60,7 @@ typedef struct boundary_block_struct boundary_block;
 struct boundary_struct
 {
     boundary_type type;
-    union
-    {
+    union {
         unsigned n;
         boundary_curve curve;
         boundary_block block;
@@ -64,9 +69,8 @@ struct boundary_struct
 
 struct mesh_block_struct
 {
-    const char* label;
-    union
-    {
+    const char *label;
+    union {
         struct
         {
             boundary bsouth;
@@ -78,4 +82,4 @@ struct mesh_block_struct
     };
 };
 
-#endif //MESH_GEOMETRY_H
+#endif // MESH_GEOMETRY_H

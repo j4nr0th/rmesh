@@ -12,7 +12,7 @@
 #endif
 
 #ifndef INTERNAL_MODULE_FUNCTION
-    #define INTERNAL_MODULE_FUNCTION
+#define INTERNAL_MODULE_FUNCTION
 #endif
 
-#endif //DEFINES_H
+#endif // DEFINES_H

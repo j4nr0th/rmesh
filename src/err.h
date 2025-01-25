@@ -19,9 +19,8 @@ enum error_id_enum
     MESH_COUNT,
 };
 
+const char *error_id_to_str(error_id id);
 
-const char* error_id_to_str(error_id id);
+const char *error_id_to_msg(error_id id);
 
-const char* error_id_to_msg(error_id id);
-
-#endif //MESH_ERR_H
+#endif // MESH_ERR_H
