@@ -1,9 +1,6 @@
 //
 // Created by jan on 22.6.2024.
 //
-#ifndef PY_LIMITED_API
-#define PY_LIMITED_API 0x030A0000
-#endif
 
 #define PY_SSIZE_CLEAN
 #include <Python.h>
@@ -80,7 +77,7 @@ static PyObject *mesh_getl(PyObject *self, void *unused)
     }
     npy_intp dims = 2 * this->data.n_lines;
 
-    PyArrayObject *arr = (PyArrayObject *)PyArray_SimpleNewFromData(1, &dims, NPY_INT32, this->data.p_lines);
+    PyArrayObject *arr = (PyArrayObject *)PyArray_SimpleNewFromData(1, &dims, NPY_INT, this->data.p_lines);
     if (arr)
     {
         Py_INCREF(self);
@@ -629,49 +626,23 @@ static void mesh_dtor(PyObject *self)
     mesh_destroy(&this->data, &a);
 }
 
-static PyType_Slot mesh_type_slots[] = {
-    {.slot = Py_tp_new, .pfunc = PyType_GenericNew},
-    {.slot = Py_tp_getset, .pfunc = mesh_getset},
-    {.slot = Py_tp_doc, .pfunc = "internal mesh interface"},
-    {.slot = Py_tp_finalize, .pfunc = mesh_dtor},
-    {.slot = Py_tp_methods, mesh_methods},
-    {0, NULL} // Sentinel
+static PyTypeObject mesh_type = {
+    .ob_base = PyVarObject_HEAD_INIT(NULL, 0).tp_name = "rmsh._rmsh._Mesh",
+    .tp_basicsize = sizeof(PyMesh2dObject),
+    .tp_itemsize = 0,
+    .tp_new = PyType_GenericNew,
+    .tp_getset = mesh_getset,
+    .tp_doc = "internal mesh interface",
+    .tp_finalize = mesh_dtor,
+    .tp_methods = mesh_methods,
+    .tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_IMMUTABLETYPE | Py_TPFLAGS_DISALLOW_INSTANTIATION,
 };
-
-static PyType_Spec mesh_type_spec = {
-    .name = "rmsh._rmsh._Mesh",
-    .basicsize = sizeof(PyMesh2dObject),
-    .itemsize = 0,
-    .flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_IMMUTABLETYPE | Py_TPFLAGS_DISALLOW_INSTANTIATION,
-    .slots = mesh_type_slots,
-};
-
-// static PyTypeObject mesh_type =
-//     {
-//         .ob_base = PyVarObject_HEAD_INIT(NULL, 0)
-//         .tp_name = "_rmsh.mesh",
-//         .tp_doc = "internal mesh interface",
-//         .tp_basicsize = sizeof(PyMesh2dObject),
-//         .tp_itemsize = 0,
-//         .tp_flags = Py_TPFLAGS_DEFAULT|Py_TPFLAGS_IMMUTABLETYPE|Py_TPFLAGS_DISALLOW_INSTANTIATION,
-//         .tp_new = PyType_GenericNew,
-//         .tp_getset = mesh_getset,
-//         .tp_finalize = mesh_dtor,
-//         .tp_methods = mesh_methods,
-//     };
-
-// static PyMethodDef module_methods[] = {
-//     {.ml_name = "_create_elliptical_mesh",
-//      .ml_meth = rmsh_create_mesh_function,
-//      .ml_flags = METH_VARARGS,
-//      .ml_doc = "Internal module function, which creates an elliptical mesh"},
-//     //  Terminating entry
-//     {NULL, NULL, 0, NULL},
-// };
 
 static PyModuleDef module_definition = {
-    .m_base = PyModuleDef_HEAD_INIT, .m_name = "_rmsh", .m_doc = "Rectangular Mesh Generator", .m_size = -1,
-    // .m_methods = module_methods,
+    .m_base = PyModuleDef_HEAD_INIT,
+    .m_name = "_rmsh",
+    .m_doc = "Rectangular Mesh Generator",
+    .m_size = -1,
 };
 
 PyMODINIT_FUNC PyInit__rmsh(void)
@@ -681,19 +652,13 @@ PyMODINIT_FUNC PyInit__rmsh(void)
     {
         return NULL;
     }
-    PyObject *mesh_type = PyType_FromSpec(&mesh_type_spec);
-    // if (PyType_Ready(&mesh_type) < 0)
-    // {
-    //     return NULL;
-    // }
     PyObject *m = PyModule_Create(&module_definition);
     if (m == NULL)
     {
         return m;
     }
-    if (PyModule_AddObject(m, "_Mesh", mesh_type) < 0)
+    if (PyModule_AddType(m, &mesh_type) < 0)
     {
-        Py_DECREF(&mesh_type);
         Py_DECREF(m);
         return NULL;
     }

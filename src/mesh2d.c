@@ -99,14 +99,6 @@ static inline jmtx_result boundary_point_condition(jmtxd_matrix_crs *mat, const 
     return jmtxd_matrix_crs_build_row(mat, idx, 1, &index, &value);
 }
 
-enum
-{
-    DIRECT_SOLVER_LIMIT = (1 << 12),
-    GOD_HELP_ME = (1 << 20),
-    GMRESR_MLIM = (1 << 6),
-    GCR_TRUNCATION_LIM = (1 << 7)
-};
-
 static inline jmtx_result solve_the_system_of_equations(
     const unsigned npts, const jmtxd_matrix_crs *mat, double xrhs[_RMSH_ARRAY_ATTRIB(const restrict static npts)],
     double yrhs[_RMSH_ARRAY_ATTRIB(const restrict static npts)], double out_x[_RMSH_ARRAY_ATTRIB(const restrict npts)],
@@ -115,9 +107,11 @@ static inline jmtx_result solve_the_system_of_equations(
 {
     jmtx_result res = JMTX_RESULT_SUCCESS;
     jmtx_result r1 = JMTX_RESULT_SUCCESS, r2 = JMTX_RESULT_SUCCESS;
+    memset(out_x, 0, sizeof *out_x * npts);
+    memset(out_y, 0, sizeof *out_y * npts);
 
     //  Is the problem small enough to solve for it directly?
-    if (npts < DIRECT_SOLVER_LIMIT || cfg->direct)
+    if (cfg->direct)
     {
         jmtxd_matrix_brm *banded = NULL, *l = NULL, *u = NULL;
         if (cfg->verbose)
@@ -695,9 +689,9 @@ static inline void deal_with_line_boundary(const boundary_block *boundary, const
 typedef struct mesh2d_geo_args_struct mesh_geo_args;
 struct mesh2d_geo_args_struct
 {
-    unsigned point_cnt;
-    unsigned max_lines;
-    unsigned max_surfaces;
+    size_t point_cnt;
+    size_t max_lines;
+    size_t max_surfaces;
     unsigned *block_offsets;
     const double *xnodal;
     const double *ynodal;
@@ -1222,14 +1216,14 @@ error_id mesh2d_create_elliptical(unsigned n_blocks, mesh2d_block *blocks, const
             return MESH_BOUNDARY_SIZE_MISMATCH;
         }
 
-        unsigned npts = nnorth * n_east;
-        unsigned n1 = n_east;
-        unsigned n2 = nnorth;
+        size_t npts = nnorth * n_east;
+        size_t n1 = n_east;
+        size_t n2 = nnorth;
         info[iblk].n1 = n1;
         info[iblk].n2 = n2;
         info[iblk].points = allocator->alloc(allocator, n1 * n2 * sizeof(*info[iblk].points));
         assert(info[iblk].points);
-        memset(info[iblk].points, ~0u, n1 * n2 * sizeof(*info[iblk].points));
+        memset(info[iblk].points, ~0, n1 * n2 * sizeof(*info[iblk].points));
         info[iblk].lines = allocator->alloc(allocator, (n1 * (n2 - 1) + (n1 - 1) * n2) * sizeof(*info[iblk].lines));
         assert(info[iblk].lines);
         info[iblk].surfaces = allocator->alloc(allocator, (n1 - 1) * (n2 - 1) * sizeof(*info[iblk].surfaces));
@@ -1286,7 +1280,7 @@ error_id mesh2d_create_elliptical(unsigned n_blocks, mesh2d_block *blocks, const
     for (unsigned iblock = 0; iblock < n_blocks; ++iblock)
     {
         const mesh2d_block *block = blocks + iblock;
-        const unsigned offset = block_offsets[iblock];
+        const size_t offset = block_offsets[iblock];
         const unsigned n1 = info[iblock].n1;
         const unsigned n2 = info[iblock].n2;
 
@@ -1317,10 +1311,10 @@ error_id mesh2d_create_elliptical(unsigned n_blocks, mesh2d_block *blocks, const
             else
             {
                 const boundary_block *sb = &block->bsouth.block, *wb = &block->bwest.block;
-                unsigned iw = wb->target;
-                unsigned offset_wb = block_offsets[iw];
-                unsigned is = sb->target;
-                unsigned offset_sb = block_offsets[is];
+                size_t iw = wb->target;
+                size_t offset_wb = block_offsets[iw];
+                size_t is = sb->target;
+                size_t offset_sb = block_offsets[is];
                 res = interior_point_equation(
                     system_matrix, offset + 0, offset_wb + find_boundary_interior_node(info + iw, wb->target_id, 0),
                     offset + 1, offset + n2, offset_sb + find_boundary_interior_node(info + is, sb->target_id, n2 - 1),
