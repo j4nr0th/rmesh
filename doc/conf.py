@@ -20,7 +20,6 @@ extensions: list[str] = [
     "sphinx.ext.doctest",
     "sphinx.ext.viewcode",
     "sphinx_gallery.gen_gallery",
-    "jupyter_sphinx",
     "pydata_sphinx_theme",
 ]
 
