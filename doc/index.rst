@@ -15,3 +15,4 @@ providing performance of C.
 
    source/blocks
    source/mesh
+   auto_examples/index
