@@ -156,7 +156,7 @@ with its boundaries being the circumference of the circle that we want to mesh.
 
  .. code-block:: none
 
-    Meshed in 0.00053415 seconds.
+    Meshed in 0.00049365 seconds.
 
 
 
@@ -179,7 +179,7 @@ with its boundaries being the circumference of the circle that we want to mesh.
 
  .. code-block:: none
 
-    Meshed in 0.00050174 seconds.
+    Meshed in 0.000499351 seconds.
 
 
 
@@ -203,7 +203,7 @@ with its boundaries being the circumference of the circle that we want to mesh.
 
  .. code-block:: none
 
-    Meshed in 0.00806869 seconds.
+    Meshed in 0.00807735 seconds.
 
 
 
@@ -283,7 +283,7 @@ the boundaries defined by :class:`BoundaryBlock` objects.
 
  .. code-block:: none
 
-    Meshed in 3.6018e-05 seconds.
+    Meshed in 3.8422e-05 seconds.
 
 
 
@@ -306,7 +306,7 @@ the boundaries defined by :class:`BoundaryBlock` objects.
 
  .. code-block:: none
 
-    Meshed in 0.000137317 seconds.
+    Meshed in 0.000170168 seconds.
 
 
 
@@ -330,7 +330,7 @@ the boundaries defined by :class:`BoundaryBlock` objects.
 
  .. code-block:: none
 
-    Meshed in 0.0102921 seconds.
+    Meshed in 0.0102777 seconds.
 
 
 
@@ -441,7 +441,7 @@ significantly worse.
 
  .. code-block:: none
 
-    Meshed in 6.4039e-05 seconds.
+    Meshed in 6.6404e-05 seconds.
 
 
 
@@ -464,7 +464,7 @@ significantly worse.
 
  .. code-block:: none
 
-    Meshed in 0.000730348 seconds.
+    Meshed in 0.000726724 seconds.
 
 
 
@@ -488,7 +488,7 @@ significantly worse.
 
  .. code-block:: none
 
-    Meshed in 0.130347 seconds.
+    Meshed in 0.134927 seconds.
 
 
 
@@ -614,7 +614,7 @@ together using a central block with no numerical boundaries.
 
  .. code-block:: none
 
-    Meshed in 7.3668e-05 seconds.
+    Meshed in 8.061e-05 seconds.
 
 
 
@@ -637,7 +637,7 @@ together using a central block with no numerical boundaries.
 
  .. code-block:: none
 
-    Meshed in 0.000361617 seconds.
+    Meshed in 0.000360712 seconds.
 
 
 
@@ -661,7 +661,7 @@ together using a central block with no numerical boundaries.
 
  .. code-block:: none
 
-    Meshed in 0.0188493 seconds.
+    Meshed in 0.0188475 seconds.
 
 
 
@@ -733,7 +733,7 @@ topology will still remain correct.
 
  .. code-block:: none
 
-    Meshed in 2.8404e-05 seconds.
+    Meshed in 2.8743e-05 seconds.
 
 
 
@@ -756,7 +756,7 @@ topology will still remain correct.
 
  .. code-block:: none
 
-    Meshed in 4.2139e-05 seconds.
+    Meshed in 4.2429e-05 seconds.
 
 
 
@@ -780,7 +780,7 @@ topology will still remain correct.
 
  .. code-block:: none
 
-    Meshed in 0.000342321 seconds.
+    Meshed in 0.000329073 seconds.
 
 
 
@@ -884,7 +884,7 @@ This example here does so with four different blocks.
 
  .. code-block:: none
 
-    Meshed in 9.2764e-05 seconds.
+    Meshed in 9.4667e-05 seconds.
 
 
 
@@ -907,7 +907,7 @@ This example here does so with four different blocks.
 
  .. code-block:: none
 
-    Meshed in 0.000771224 seconds.
+    Meshed in 0.000762533 seconds.
 
 
 
@@ -930,7 +930,7 @@ This example here does so with four different blocks.
 
  .. code-block:: none
 
-    Meshed in 0.069139 seconds.
+    Meshed in 0.0690637 seconds.
 
 
 
@@ -938,7 +938,7 @@ This example here does so with four different blocks.
 
 .. rst-class:: sphx-glr-timing
 
-   **Total running time of the script:** (0 minutes 1.728 seconds)
+   **Total running time of the script:** (0 minutes 1.740 seconds)
 
 
 .. _sphx_glr_download_auto_examples_plot_circle.py:
