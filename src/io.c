@@ -45,13 +45,13 @@ static inline void serialize_boundary(FILE *fout, const boundary *b)
 {
     if (b->type == BOUNDARY_TYPE_BLOCK)
     {
-        fprintf(fout, "%u %u %u %u\n", b->block.owner, b->block.owner_id, b->block.target, b->block.target_id);
+        (void)fprintf(fout, "%u %u %u %u\n", b->block.owner, b->block.owner_id, b->block.target, b->block.target_id);
     }
     else
     {
         for (unsigned j = 0; j < b->n; ++j)
         {
-            fprintf(fout, "(%g, %g) ", b->curve.x[j], b->curve.y[j]);
+            (void)fprintf(fout, "(%g, %g) ", b->curve.x[j], b->curve.y[j]);
         }
     }
 }
@@ -60,7 +60,7 @@ static inline void deserialize_boundary(FILE *fout, boundary *b)
 {
     if (b->type == BOUNDARY_TYPE_BLOCK)
     {
-        fscanf(fout, "%u %u %u %u\n", &b->block.owner, &b->block.owner_id, &b->block.target, &b->block.target_id);
+        (void)fscanf(fout, "%u %u %u %u\n", &b->block.owner, &b->block.owner_id, &b->block.target, &b->block.target_id);
     }
     else
     {
@@ -68,7 +68,7 @@ static inline void deserialize_boundary(FILE *fout, boundary *b)
         double *y = calloc(b->n, sizeof *x);
         for (unsigned j = 0; j < b->n; ++j)
         {
-            fscanf(fout, "(%lg, %lg) ", x + j, y + j);
+            (void)fscanf(fout, "(%lg, %lg) ", x + j, y + j);
         }
         b->curve.x = x;
         b->curve.y = y;
@@ -109,23 +109,24 @@ int mesh2d_load_args(const char *fname, unsigned *pn_blocks, mesh2d_block **pp_b
         return -1;
     }
     unsigned n_blocks;
-    fscanf(fout, "Block cnt: %u\n", &n_blocks);
+    (void)fscanf(fout, "Block cnt: %u\n", &n_blocks);
     mesh2d_block *p_blocks = calloc(n_blocks, sizeof *p_blocks);
     for (unsigned i = 0; i < n_blocks; ++i)
     {
         mesh2d_block *b = p_blocks + i;
         b->label = 0;
-        fscanf(fout, "Block:\n\tNorth(%u,%u) ->", &b->bnorth.type, &b->bnorth.n);
+        (void)fscanf(fout, "Block:\n\tNorth(%u,%u) ->", &b->bnorth.type, &b->bnorth.n);
         deserialize_boundary(fout, &b->bnorth);
-        fscanf(fout, "\n\tWest(%u,%u) ->", &b->bwest.type, &b->bwest.n);
+        (void)fscanf(fout, "\n\tWest(%u,%u) ->", &b->bwest.type, &b->bwest.n);
         deserialize_boundary(fout, &b->bwest);
-        fscanf(fout, "\n\tSouth(%u,%u) ->", &b->bsouth.type, &b->bsouth.n);
+        (void)fscanf(fout, "\n\tSouth(%u,%u) ->", &b->bsouth.type, &b->bsouth.n);
         deserialize_boundary(fout, &b->bsouth);
-        fscanf(fout, "\n\tEast(%u,%u) ->", &b->beast.type, &b->beast.n);
+        (void)fscanf(fout, "\n\tEast(%u,%u) ->", &b->beast.type, &b->beast.n);
         deserialize_boundary(fout, &b->beast);
     }
-    fscanf(fout, "\ncfg:\n\tdirect:%d\n\tmax_iter:%u\n\tmax_rnds: %u\n\tsmoother_rnds: %u\n\ttol: %lg\n\tverbose: %d\n",
-           &cfg->direct, &cfg->max_iterations, &cfg->max_rounds, &cfg->smoother_rounds, &cfg->tol, &cfg->verbose);
+    (void)fscanf(fout,
+                 "\ncfg:\n\tdirect:%d\n\tmax_iter:%u\n\tmax_rnds: %u\n\tsmoother_rnds: %u\n\ttol: %lg\n\tverbose: %d\n",
+                 &cfg->direct, &cfg->max_iterations, &cfg->max_rounds, &cfg->smoother_rounds, &cfg->tol, &cfg->verbose);
     *pn_blocks = n_blocks;
     *pp_blocks = p_blocks;
     fclose(fout);
