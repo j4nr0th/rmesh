@@ -1,7 +1,10 @@
+"""Geometrical primitive objects."""
+
 from dataclasses import dataclass
-from enum import Enum, unique
+from enum import IntEnum, unique
 
 import numpy as np
+import numpy.typing as npt
 
 INVALID_POINT_IDX = -1
 INVALID_LINE_IDX = 0
@@ -54,7 +57,7 @@ class Surface:
 
 
 @unique
-class BoundaryId(Enum):
+class BoundaryId(IntEnum):
     """Enum used to identify sides of the mesh in terms of topology.
 
     Valid values are:
@@ -102,13 +105,14 @@ class BoundaryCurve:
         Values of Y coordinate along the boundary.
     """
 
-    x: np.ndarray
-    y: np.ndarray
+    x: npt.NDArray[np.float64]
+    y: npt.NDArray[np.float64]
 
 
 _SolverCfgTuple = tuple[bool, float, int, int, int]
 _BoundaryInfoTuple = (
-    tuple[int, int, int, np.ndarray, np.ndarray] | tuple[int, int, int, int, int]
+    tuple[int, int, int, npt.NDArray[np.float64], npt.NDArray[np.float64]]
+    | tuple[int, int, int, int, int]
 )
 _BlockInfoTuple = tuple[
     str, _BoundaryInfoTuple, _BoundaryInfoTuple, _BoundaryInfoTuple, _BoundaryInfoTuple

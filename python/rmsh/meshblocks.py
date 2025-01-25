@@ -1,24 +1,34 @@
+"""Mesh block implementation and the function that pre-processes inputs for C code."""
+
 #   Internal imports
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from typing import Sequence
 
 #   External imports
 import numpy as np
 
-from rmsh._geometry import (
+from rmsh._rmsh import _Mesh
+from rmsh.geometry import (
     BoundaryBlock,
     BoundaryCurve,
     BoundaryId,
     _BlockInfoTuple,
     _BoundaryInfoTuple,
 )
-from rmsh._mesh2d import Mesh2D
-from rmsh._rmsh import _Mesh
+from rmsh.mesh2d import Mesh2D
 
 
-@dataclass(frozen=False)
+@dataclass(frozen=True)
 class MeshBlock:
     """Basic building block of the mesh, which describes a structured mesh block.
+
+    Boundaries of the block can be either prescribed curves, or instead a
+    "soft" boundary, where the only information specified is that it should connect to
+    another block. Such "soft" boundaries allow for a potentially smoother transition
+    between different blocks.
+
+    When blocks share a boundary, the only requirement is that the boundary that is
+    shared between them has such a number of nodes that the opposite boundary matches it.
 
     Parameters
     ----------
@@ -26,7 +36,7 @@ class MeshBlock:
             Label by which this block will be referred to in the mesh, as well as by other
             blocks which have a block
             boundary to this block.
-    boundaries : dict[BoundaryId, BoundaryCurve|BoundaryBlock]
+    boundaries : Mapping of BoundaryId to BoundaryCurve or BoundaryBlock
         Dictionary containing the boundaries with their respective IDs. All four might be
         specified, or only a few.
 
@@ -45,10 +55,10 @@ class MeshBlock:
     boundaries: dict[BoundaryId, BoundaryCurve | BoundaryBlock | None]
 
     def __init__(
-        self, label: str, boundaries: dict[BoundaryId, BoundaryCurve | BoundaryBlock]
+        self, label: str, boundaries: Mapping[BoundaryId, BoundaryCurve | BoundaryBlock]
     ):
-        self.label = label
-        self.boundaries = dict()
+        object.__setattr__(self, "label", label)
+        object.__setattr__(self, "boundaries", dict())
         for k in boundaries:
             match k:
                 case (
@@ -200,24 +210,24 @@ class SolverConfig:
 
     Parameters
     ----------
-    force_direct : bool = False
+    force_direct : bool, default: False
         Force the direct solver to be used regardless of the problem size. This may allow
         for solution of some cases where the mesh is ill-defined or very close to
         ill-defined. Not recommended for other cases, since it is very slow.
-    tolerance : float = 1e-6
+    tolerance : float, default: 1e-6
         Tolerance used by the iterative solver to check for convergence. The solver will
         consider the iterative solution to be converged when
         ``tolerance * norm(y) >= norm(r)``, where ``norm(y)`` is the L2 norm of the RHS of
-        the equation being solved and `norm(r)` is the L2 norm of the residual. A lower
+        the equation being solved and ``norm(r)`` is the L2 norm of the residual. A lower
         value means a solution is more converged, but a value which is too low might be
         unable to give a solution.
-    smoother_rounds : int = 0
+    smoother_rounds : int, default: 0
         After each round of using an iterative solver, a Jacobi smoother can be used in
         order to "smooth" the intermediate iterative solution for up to
         ``smoother_rounds``. Since the system matrix being solved is not strictly
         diagonally dominant, there is no guarantee on error reduction, but there is at
         least a guarantee on the error not being increased by this.
-    max_iterations : int = 128
+    max_iterations : int, default: 128
         How many iterations the iterative solver will perform each round at most, before
         restarting. Smaller values might cause the convergence to be very slow due
         discarding the entire Krylov subspace for that round. Very large values for
@@ -225,7 +235,7 @@ class SolverConfig:
         degenerate and residual could start to grow again.
         If a solver detects that the Krylov subspace has degenerated, a round of iterative
         solver might end sooner.
-    max_rounds : int = 8
+    max_rounds : int, default: 8
         How many round of iterative solver to run at most. This means that the total
         number of rounds that PILUBICG-STAB could run is ``max_rounds * max_iterations``,
         while the maximum number of smoother rounds is ``max_rounds * smoother_rounds``.
@@ -240,26 +250,25 @@ class SolverConfig:
 
 def create_elliptical_mesh(
     blocks: Sequence[MeshBlock],
-    *,
     verbose: bool = False,
     allow_insane: bool = False,
-    solver_cfg: SolverConfig = SolverConfig(),
+    solver_cfg: SolverConfig | None = None,
 ) -> tuple[Mesh2D, float, float]:
     """Create a mesh from mesh blocks by solving the Laplace equation for mesh nodes.
 
     Parameters
     ----------
-    blocks : Sequence[MeshBlock]
+    blocks : Sequence of MeshBlock
         A sequence of blocks which constitute the mesh.
-    verbose : bool = False
+    verbose : bool, default: False
         When set to True the solver and function will print extra information to stdout
         related to solver progress. When False, only warnings and exceptions will be
         produced.
-    allow_insane : bool = False
+    allow_insane : bool, default: False
         Disable boundary connectivity checks. By default, these are enabled, causing an
         error to be raised if neighboring curve boundaries of the same block don't share
         a single point.
-    solver_cfg : SolverConfig
+    solver_cfg : SolverConfig, optional
         Contains additional options to configure the solver used to compute the mesh
         coordinates.
 
@@ -272,6 +281,14 @@ def create_elliptical_mesh(
     float
         The L2 norm of the residual of the system solved for the Y coordinate.
     """
+    if solver_cfg is None:
+        solver_cfg = SolverConfig(
+            force_direct=False,
+            tolerance=1e-6,
+            smoother_rounds=0,
+            max_iterations=128,
+            max_rounds=8,
+        )
     bdict: dict[str, tuple[int, MeshBlock]] = (
         dict()
     )  # Holds indices to which the blocks map to

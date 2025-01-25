@@ -1,9 +1,11 @@
+"""Stub detailing the C-extension types used internally."""
+
 from __future__ import annotations
 
 import numpy as np
 import numpy.typing as npt
 
-from rmsh._geometry import _BlockInfoTuple, _SolverCfgTuple
+from rmsh.geometry import _BlockInfoTuple, _SolverCfgTuple
 
 class _Mesh:
     """Internal mesh interface."""
@@ -50,12 +52,12 @@ class _Mesh:
         ...
 
     @property
-    def line_indices(self) -> npt.NDArray[np.float64]:
+    def line_indices(self) -> npt.NDArray[np.int32]:
         """Line indices."""
         ...
 
     @property
-    def surface_indices(self) -> npt.NDArray[np.float64]:
+    def surface_indices(self) -> npt.NDArray[np.int32]:
         """Surface indices."""
         ...
 
