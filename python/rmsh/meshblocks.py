@@ -7,7 +7,6 @@ from dataclasses import dataclass
 #   External imports
 import numpy as np
 
-from rmsh._rmsh import _Mesh
 from rmsh.geometry import (
     BoundaryBlock,
     BoundaryCurve,
@@ -430,8 +429,11 @@ def create_elliptical_mesh(
         solver_cfg.max_iterations,
         solver_cfg.max_rounds,
     )
-    data, rx, ry = _Mesh.create_elliptical_mesh(inputs, verbose, extra)
     name_map: dict[str, int] = dict()
     for k in bdict:
         name_map[k] = bdict[k][0]
-    return Mesh2D(data, name_map), rx, ry
+
+    mesh, rx, ry = Mesh2D._create_elliptical_mesh_labeled(
+        inputs, verbose, extra, name_map
+    )
+    return mesh, rx, ry

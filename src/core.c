@@ -75,9 +75,9 @@ static PyObject *mesh_getl(PyObject *self, void *unused)
     {
         Py_RETURN_NONE;
     }
-    npy_intp dims = 2 * this->data.n_lines;
+    npy_intp dims[2] = {this->data.n_lines, 2};
 
-    PyArrayObject *arr = (PyArrayObject *)PyArray_SimpleNewFromData(1, &dims, NPY_INT, this->data.p_lines);
+    PyArrayObject *arr = (PyArrayObject *)PyArray_SimpleNewFromData(2, dims, NPY_INT, this->data.p_lines);
     if (arr)
     {
         Py_INCREF(self);
@@ -365,10 +365,21 @@ static PyObject *mesh_surface_element_points(PyObject *self, PyObject *v)
 }
 
 static PyGetSetDef mesh_getset[] = {
-    {"pos_x", mesh_getx, NULL, "X coordinates of nodes", NULL},
-    {"pos_y", mesh_gety, NULL, "Y coordinates of nodes", NULL},
-    {"line_indices", mesh_getl, NULL, "line indices", NULL},
-    {"surface_indices", mesh_gets, NULL, "surface indices", NULL},
+    {"pos_x", mesh_getx, NULL, "NDArray[np.double] : X coordinates of nodes", NULL},
+    {"pos_y", mesh_gety, NULL, "NDArray[np.double] : Y coordinates of nodes", NULL},
+    {"lines", mesh_getl, NULL,
+     "NDArray[np.int32] : line indices\n"
+     "\n"
+     "Has a shape ``(N, 2)``, where ``N`` is the number of lines in the mesh.\n",
+     NULL},
+    {"surfaces", mesh_gets, NULL,
+     "NDArray[np.int32] : surface indices\n"
+     "\n"
+     "Has a shape ``(N, 4)``, where ``N`` is the number of surfaces in the mesh.\n"
+     "Indices start at 1 instead of 0 and a negative value of the index means\n"
+     "that a line should be in opposite orientation to how it is in the ``lines``\n"
+     "array to maintain a consistent surface orientation.\n",
+     NULL},
     {NULL} //  Sentinel
 };
 
@@ -542,7 +553,7 @@ static PyObject *rmsh_create_mesh_function(PyObject *type, PyObject *args)
         printf("Finished converting the inputs\n");
     //  Blocks should be all set up now
 
-    PyMesh2dObject *msh = PyObject_New(PyMesh2dObject, mesh_type);
+    PyMesh2dObject *msh = (PyMesh2dObject *)mesh_type->tp_alloc(mesh_type, 0);
     if (msh == NULL)
     {
         PyMem_FREE(p_blocks);
@@ -588,34 +599,160 @@ static PyObject *rmsh_create_mesh_function(PyObject *type, PyObject *args)
 }
 
 static PyMethodDef mesh_methods[] = {
-    {.ml_name = "blines",
+    {.ml_name = "block_lines",
      .ml_meth = mesh_block_lines,
      .ml_flags = METH_O,
-     .ml_doc = "retrieves indices of lines which are in a block with the given index"},
-    {.ml_name = "boundary_lines",
+     .ml_doc = "block_lines(idx: int, /) -> npt.NDArray[np.int32]\n"
+               "Return indices of all lines within a block.\n"
+               "\n"
+               "Indices start at 1 and a negative value indicates a reversed orientation of\n"
+               "the line.\n"
+               "\n"
+               "Parameters\n"
+               "----------\n"
+               "block_id : int\n"
+               "    The index of the block for which the line indices should be returned.\n"
+               "\n"
+               "Returns\n"
+               "-------\n"
+               "ndarray[int32]\n"
+               "    Array with indices of all lines within the mesh block specified by\n"
+               "    ``block_id``.\n"},
+    {.ml_name = "block_boundary_lines",
      .ml_meth = mesh_boundary_lines,
      .ml_flags = METH_VARARGS,
-     .ml_doc = "Retrieves line indices for a specified boundary of a block"},
-    {.ml_name = "boundary_pts",
+     .ml_doc = "block_boundary_lines(block_id: int, boundary_id: int, /) -> npt.NDArray[np.int32]\n"
+               "Return indices of all lines on a boundary of a block.\n"
+               "\n"
+               "Indices start at 1 and a negative value indicates a reversed orientation of the\n"
+               "line.\n"
+               "\n"
+               "Parameters\n"
+               "----------\n"
+               "block_id : int\n"
+               "    The index of the block for which the line indices should be returned.\n"
+               "boundary : BoundaryId\n"
+               "    The ID of a boundary from which the line indices should be returned.\n"
+               "\n"
+               "Returns\n"
+               "-------\n"
+               "ndarray[int32]\n"
+               "    Array with indices of all lines on a boundary of a block ``block_id``.\n"},
+    {.ml_name = "block_boundary_points",
      .ml_meth = mesh_boundary_points,
      .ml_flags = METH_VARARGS,
-     .ml_doc = "Retrieves point indices for a specified boundary of a block"},
-    {.ml_name = "boundary_surf",
+     .ml_doc = "block_boundary_points(block_id: int, boundary: BoundaryId) -> npt.NDArray[np.int32]\n"
+               "Return indices of all nodes on a boundary of a block.\n"
+               "\n"
+               "Parameters\n"
+               "----------\n"
+               "block_id : int\n"
+               "    The index of the block for which the point indices should be returned.\n"
+               "boundary : BoundaryId\n"
+               "    The ID of a boundary from which the point indices should be returned.\n"
+               "\n"
+               "Returns\n"
+               "-------\n"
+               "ndarray[int32]\n"
+               "    Array with indices of all points on a boundary of a block ``block_id``.\n"},
+    {.ml_name = "block_boundary_surfaces",
      .ml_meth = mesh_boundary_surfaces,
      .ml_flags = METH_VARARGS,
-     .ml_doc = "Retrieves surface indices for a specified boundary of a block"},
+     .ml_doc = "block_boundary_surfaces(block_id: str, boundary: BoundaryId) -> npt.NDArray[np.int32]\n"
+               "Return indices of all surfaces on a boundary of a block.\n"
+               "\n"
+               "Indices start at 1 and a negative value indicates a reversed orientation\n"
+               "of the surface, though for this function this is not needed.\n"
+               "\n"
+               "Parameters\n"
+               "----------\n"
+               "block_id : str\n"
+               "    The label of the block for which the surfaces indices should be returned.\n"
+               "boundary : BoundaryId\n"
+               "    The ID of a boundary from which the surfaces indices should be returned.\n"
+               "\n"
+               "Returns\n"
+               "-------\n"
+               "ndarray[int32]\n"
+               "    Array with indices of all surfaces on a boundary of a block ``block_id``.\n"},
     {.ml_name = "surface_element",
      .ml_meth = mesh_surface_element,
      .ml_flags = METH_VARARGS,
-     .ml_doc = "Returns indices of surfaces for a surface element"},
+     .ml_doc = "surface_element(surf, order) -> npt.NDArray[np.int32]\n"
+               "Return indices of surfaces, which form a square element of width (2*order+1).\n"
+               "\n"
+               "This is intended to be used for computing cell-based interpolations.\n"
+               "\n"
+               "Parameters\n"
+               "----------\n"
+               "surf : int\n"
+               "    The one-based index of the surface which should be the center of the element.\n"
+               "order : int\n"
+               "    Size of the element in each direction away from the center (zero means only\n"
+               "    the element, one means 3 x 3, etc.)\n"
+               "\n"
+               "Returns\n"
+               "-------\n"
+               "ndarray[int32]\n"
+               "    Array with indices of all surfaces in the element. Note that since one-based\n"
+               "    indexing is used, a zero indicates a missing surface caused by a numerical\n"
+               "    boundary. Negative indices mean a negative orientation.\n"},
     {.ml_name = "surface_element_points",
      .ml_meth = mesh_surface_element_points,
      .ml_flags = METH_VARARGS,
-     .ml_doc = "Returns indices of indices for a surface element"},
-    {.ml_name = "create_elliptical_mesh",
+     .ml_doc = "surface_element_points(surf: int, order: int) -> npt.NDArray[np.int32]\n"
+               "Return indices of points, which form a square element of width (2*order+1).\n"
+               "\n"
+               "This is intended to be used for computing nodal-based interpolations for surface\n"
+               "elements.\n"
+               "\n"
+               "Parameters\n"
+               "----------\n"
+               "surf : int\n"
+               "    The one-based index of the surface which should be the center of the element.\n"
+               "order : int\n"
+               "    Size of the element in each direction away from the center (zero means only\n"
+               "    the element, one means 3 x 3, etc.)\n"
+               "\n"
+               "Returns\n"
+               "-------\n"
+               "ndarray[int32]\n"
+               "    Array with indices of all indices in the element. Note that since one-based\n"
+               "    indexing is used, a value of -1 indicates a missing point caused by a\n"
+               "    numerical boundary.\n"
+
+    },
+    {.ml_name = "_create_elliptical_mesh",
      .ml_meth = rmsh_create_mesh_function,
      .ml_flags = METH_CLASS | METH_VARARGS,
-     .ml_doc = "Create an elliptical mesh."},
+     .ml_doc = "_create_elliptical_mesh(\n"
+               "    arg1: list[_BlockInfoTuple],\n"
+               "    arg2: bool,\n"
+               "    arg3: _SolverCfgTuple,\n"
+               "    /,\n"
+               ") -> tuple[Self, float, float]\n"
+               "Create an elliptical mesh.\n"
+               "\n"
+               "This method takes in *heavily* pre-processed input. This is for the sake of\n"
+               "making the parsing in C as simple as possible.\n"
+               "\n"
+               "Parameters\n"
+               "----------\n"
+               "arg1 : list of _BlockInfoTuple\n"
+               "    List of tuples which contain information about mesh blocks.\n"
+               "arg2 : bool\n"
+               "    Verbosity setting.\n"
+               "arg3 : _SolverCfgTuple\n"
+               "    Tuple containing pre-processed solver config values.\n"
+               "\n"
+               "Returns\n"
+               "-------\n"
+               "Self\n"
+               "    The newly created mesh object.\n"
+               "float\n"
+               "    Residual of the x-equation.\n"
+               "float\n"
+               "    Residual of the y-equation.\n"},
     {NULL} //  Sentinel
 };
 
@@ -627,7 +764,7 @@ static void mesh_dtor(PyObject *self)
 }
 
 static PyTypeObject mesh_type = {
-    .ob_base = PyVarObject_HEAD_INIT(NULL, 0).tp_name = "rmsh._rmsh._Mesh",
+    .ob_base = PyVarObject_HEAD_INIT(NULL, 0).tp_name = "rmsh._rmsh._Mesh2D",
     .tp_basicsize = sizeof(PyMesh2dObject),
     .tp_itemsize = 0,
     .tp_new = PyType_GenericNew,
@@ -635,7 +772,7 @@ static PyTypeObject mesh_type = {
     .tp_doc = "internal mesh interface",
     .tp_finalize = mesh_dtor,
     .tp_methods = mesh_methods,
-    .tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_IMMUTABLETYPE | Py_TPFLAGS_DISALLOW_INSTANTIATION,
+    .tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_IMMUTABLETYPE | Py_TPFLAGS_DISALLOW_INSTANTIATION | Py_TPFLAGS_BASETYPE,
 };
 
 static PyModuleDef module_definition = {

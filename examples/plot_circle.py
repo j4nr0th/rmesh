@@ -36,8 +36,8 @@ from rmsh import (
 
 def plot_mesh(m: Mesh2D) -> None:
     """Show the mesh using matplotlib."""
-    x = m.x
-    y = m.y
+    x = m.pos_x
+    y = m.pos_y
     line_indices = m.lines
     xb = x[line_indices[:, 0]]
     xe = x[line_indices[:, 1]]
