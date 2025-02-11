@@ -99,9 +99,9 @@ static PyObject *mesh_gets(PyObject *self, void *unused)
     {
         Py_RETURN_NONE;
     }
-    npy_intp dims = 4 * this->data.n_surfaces;
+    const npy_intp dims[2] = {this->data.n_surfaces, 4};
 
-    PyArrayObject *arr = (PyArrayObject *)PyArray_SimpleNewFromData(1, &dims, NPY_INT32, this->data.p_surfaces);
+    PyArrayObject *arr = (PyArrayObject *)PyArray_SimpleNewFromData(2, dims, NPY_INT32, this->data.p_surfaces);
     if (arr)
     {
         Py_INCREF(self);
@@ -113,6 +113,24 @@ static PyObject *mesh_gets(PyObject *self, void *unused)
         }
     }
     return (PyObject *)arr;
+}
+
+static PyObject *mesh_get_n_points(PyObject *self, void *Py_UNUSED(closure))
+{
+    const PyMesh2dObject *this = (PyMesh2dObject *)self;
+    return PyLong_FromSize_t((size_t)this->data.n_points);
+}
+
+static PyObject *mesh_get_n_lines(PyObject *self, void *Py_UNUSED(closure))
+{
+    const PyMesh2dObject *this = (PyMesh2dObject *)self;
+    return PyLong_FromSize_t((size_t)this->data.n_lines);
+}
+
+static PyObject *mesh_get_n_surfaces(PyObject *self, void *Py_UNUSED(closure))
+{
+    const PyMesh2dObject *this = (PyMesh2dObject *)self;
+    return PyLong_FromSize_t((size_t)this->data.n_surfaces);
 }
 
 static PyObject *mesh_block_lines(PyObject *self, PyObject *v)
@@ -380,25 +398,28 @@ static PyGetSetDef mesh_getset[] = {
      "that a line should be in opposite orientation to how it is in the ``lines``\n"
      "array to maintain a consistent surface orientation.\n",
      NULL},
+    {"n_points", mesh_get_n_points, NULL, "int : Number of points in the mesh.\n", NULL},
+    {"n_lines", mesh_get_n_lines, NULL, "int : Number of lines in the mesh.\n", NULL},
+    {"n_points", mesh_get_n_surfaces, NULL, "int : Number of surfaces in the mesh.\n", NULL},
     {NULL} //  Sentinel
 };
 
 static void *wrap_alloc(void *state, size_t sz)
 {
     (void)state;
-    return PyMem_MALLOC(sz);
+    return PyMem_Malloc(sz);
 }
 
 static void *wrap_realloc(void *state, void *ptr, size_t newsz)
 {
     (void)state;
-    return PyMem_REALLOC(ptr, newsz);
+    return PyMem_Realloc(ptr, newsz);
 }
 
 static void wrap_free(void *state, void *ptr)
 {
     (void)state;
-    PyMem_FREE(ptr);
+    PyMem_Free(ptr);
 }
 
 //  Mesh creation function

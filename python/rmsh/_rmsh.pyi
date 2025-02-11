@@ -142,6 +142,11 @@ class _Mesh2D:
         ...
 
     @property
+    def n_points(self) -> int:
+        """Number of points in the mesh."""
+        ...
+
+    @property
     def pos_x(self) -> npt.NDArray[np.float64]:
         """X coordinates of nodes."""
         ...
@@ -152,8 +157,8 @@ class _Mesh2D:
         ...
 
     @property
-    def z(self) -> npt.NDArray[np.float64]:
-        """Z coordinates of nodes."""
+    def n_lines(self) -> int:
+        """Number of lines in the mesh."""
         ...
 
     @property
@@ -162,6 +167,11 @@ class _Mesh2D:
 
         Has a shape ``(N, 2)``, where ``N`` is the number of lines in the mesh.
         """
+        ...
+
+    @property
+    def n_surfaces(self) -> int:
+        """Number of surfaces in the mesh."""
         ...
 
     @property

@@ -9,7 +9,6 @@ from rmsh._rmsh import _Mesh2D
 from rmsh.geometry import BoundaryId, _BlockInfoTuple, _SolverCfgTuple
 
 
-# TODO: this could just be a sub-class
 class Mesh2D(_Mesh2D):
     """Class which contains the mesh information.
 
