@@ -143,18 +143,20 @@ def _find_boundary_size(bnd: BoundaryBlock, blcks: dict[str, tuple[int, MeshBloc
     i = 0
     boundary: BoundaryBlock | BoundaryCurve = bnd
     while True:
-        if type(boundary) is BoundaryCurve:
-            return len(boundary.x)
-        assert type(boundary) is BoundaryBlock
+        # if type(boundary) is BoundaryCurve:
+        #     return len(boundary.x)
 
         if boundary.n != 0:
             return boundary.n
+
+        # if type is BoundaryCurve, then boundary.n can't be zero
+        assert type(boundary) is BoundaryBlock
 
         _, target = blcks[boundary.target]
         other_bnd = target.boundaries[boundary.target_id]
         assert other_bnd is not None
         if type(other_bnd) is BoundaryCurve:
-            return len(other_bnd.x)
+            return other_bnd.n
 
         # if type(other_bnd) is BoundaryBlock:
         match boundary.target_id:
@@ -329,7 +331,7 @@ def create_elliptical_mesh(
 
                     b.boundaries[bid] = flipped
                     other.boundaries[bnd.target_id] = BoundaryBlock(b.label, bid)
-                    nbnd = len(flipped.x)
+                    nbnd = flipped.n
                 elif bnd.n != 0:
                     nbnd = bnd.n
                 else:
@@ -337,7 +339,7 @@ def create_elliptical_mesh(
             #   Check that the corners of curve match up correctly if check is enabled
             elif not allow_insane:
                 assert type(bnd) is BoundaryCurve
-                nbnd = len(bnd.x)
+                nbnd = bnd.n
                 bleft = None
                 bright = None
                 match bid:

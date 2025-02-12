@@ -26,8 +26,8 @@ class Line:
         Index of the second point.
     """
 
-    p1: int = -1
-    p2: int = -1
+    p1: int = INVALID_POINT_IDX
+    p2: int = INVALID_POINT_IDX
 
 
 @dataclass(frozen=True)
@@ -50,10 +50,10 @@ class Surface:
         Index of the fourth line.
     """
 
-    l1: int = 0
-    l2: int = 0
-    l3: int = 0
-    l4: int = 0
+    l1: int = INVALID_LINE_IDX
+    l2: int = INVALID_LINE_IDX
+    l3: int = INVALID_LINE_IDX
+    l4: int = INVALID_LINE_IDX
 
 
 @unique
@@ -93,7 +93,7 @@ class BoundaryBlock:
     n: int = 0
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, init=False)
 class BoundaryCurve:
     """Defines values of points along the boundary of a mesh block.
 
@@ -107,6 +107,18 @@ class BoundaryCurve:
 
     x: npt.NDArray[np.float64]
     y: npt.NDArray[np.float64]
+    n: int
+
+    def __init__(self, x: npt.ArrayLike, y: npt.ArrayLike) -> None:
+        xv = np.array(x, np.float64)
+        yv = np.array(y, np.float64)
+        if xv.ndim != 1 or xv.size != yv.size or xv.size == 0:
+            raise ValueError(
+                "Both x and y must be 1d arrays of the same (non-zero) length."
+            )
+        object.__setattr__(self, "x", xv)
+        object.__setattr__(self, "y", yv)
+        object.__setattr__(self, "n", int(xv.size))
 
 
 _SolverCfgTuple = tuple[bool, float, int, int, int]
