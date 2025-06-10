@@ -41,13 +41,13 @@ def test_single_square():
         bottom=BoundaryCurve.from_knots(
             NBND, (X0, Y0), (0.5, -1), (X1, Y1), distribution=lambda t: t**2
         ),
-        right=BoundaryCurve.from_line((X1, Y1), (X2, Y2), NBND, lambda t: t**2),
-        top=BoundaryCurve.from_line((X2, Y2), (X3, Y3), NBND, lambda t: t**2),
-        left=BoundaryCurve.from_line((X3, Y3), (X0, Y0), NBND, lambda t: t**2),
+        right=BoundaryCurve.from_line(NBND, (X1, Y1), (X2, Y2), lambda t: t**2),
+        top=BoundaryCurve.from_line(NBND, (X2, Y2), (X3, Y3), lambda t: t**2),
+        left=BoundaryCurve.from_line(NBND, (X3, Y3), (X0, Y0), lambda t: t**2),
     )
 
     cfg = SolverConfig(tolerance=1e-5)
-    m, ry, rx = create_elliptical_mesh([b1], verbose=False, solver_cfg=cfg)
+    m, ry, rx = create_elliptical_mesh(b1, verbose=False, solver_cfg=cfg)
     assert ry <= cfg.tolerance and rx <= cfg.tolerance
 
     # x = m.pos_x

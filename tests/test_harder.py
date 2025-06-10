@@ -31,26 +31,26 @@ def test_circular():
         """Define the boundary with."""
         return np.stack((np.cos(theta), np.sin(theta)), axis=1, dtype=np.float64)
 
-    br.right = BoundaryCurve.from_samples(bnd_function, N1, lambda x: (x + 1) * np.pi / 2)
+    br.right = BoundaryCurve.from_samples(N1, bnd_function, lambda x: (x + 1) * np.pi / 2)
     br.left = bc.bbnd_right()
     br.top = bt.bbnd_right(NR)
     br.bottom = bb.bbnd_right()
 
     bl.right = bc.bbnd_left()
-    bl.left = BoundaryCurve.from_samples(bnd_function, N1, lambda x: (x + 3) * np.pi / 2)
+    bl.left = BoundaryCurve.from_samples(N1, bnd_function, lambda x: (x + 3) * np.pi / 2)
     bl.top = bt.bbnd_left()
     bl.bottom = bb.bbnd_left()
 
     bt.right = br.bbnd_top()
     bt.left = bl.bbnd_top()
-    bt.top = BoundaryCurve.from_samples(bnd_function, N2, lambda x: (x + 2) * np.pi / 2)
+    bt.top = BoundaryCurve.from_samples(N2, bnd_function, lambda x: (x + 2) * np.pi / 2)
     bt.bottom = bc.bbnd_top()
 
     bb.right = br.bbnd_bottom()
     bb.left = bl.bbnd_bottom()
     bb.top = bc.bbnd_bottom()
     bb.bottom = BoundaryCurve.from_samples(
-        bnd_function, N2, lambda x: (x + 0) * np.pi / 2
+        N2, bnd_function, lambda x: (x + 0) * np.pi / 2
     )
 
     bc.right = br.bbnd_left()
@@ -60,9 +60,7 @@ def test_circular():
 
     # t0 = time.time_ns()
     cfg = SolverConfig(tolerance=1e-5, max_iterations=512, smoother_rounds=0)
-    m, rx, ry = create_elliptical_mesh(
-        [bc, br, bt, bl, bb], verbose=False, solver_cfg=cfg
-    )
+    m, rx, ry = create_elliptical_mesh(bc, br, bt, bl, bb, verbose=False, solver_cfg=cfg)
     # del m
     assert rx <= cfg.tolerance and ry <= cfg.tolerance
     # t1 = time.time_ns()

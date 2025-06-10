@@ -3,12 +3,11 @@
 from __future__ import annotations
 
 #   Internal imports
-from collections.abc import Sequence
 from dataclasses import dataclass
 
-#   External imports
 import numpy as np
 
+#   External imports
 from rmsh.geometry import (
     Boundary,
     BoundaryBlock,
@@ -121,7 +120,7 @@ class SolverConfig:
 
 
 def create_elliptical_mesh(
-    blocks: Sequence[MeshBlock],
+    *blocks: MeshBlock,
     verbose: bool = False,
     allow_insane: bool = False,
     solver_cfg: SolverConfig | None = None,
@@ -130,8 +129,8 @@ def create_elliptical_mesh(
 
     Parameters
     ----------
-    blocks : Sequence of MeshBlock
-        A sequence of blocks which constitute the mesh.
+    *blocks : MeshBlock
+        Blocks which constitute the mesh.
     verbose : bool, default: False
         When set to True the solver and function will print extra information to stdout
         related to solver progress. When False, only warnings and exceptions will be

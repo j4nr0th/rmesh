@@ -161,19 +161,19 @@ class BoundaryCurve(Boundary):
     @classmethod
     def from_samples(
         cls,
-        func: Callable[[npt.NDArray[np.float64]], npt.ArrayLike],
         n: int,
+        func: Callable[[npt.NDArray[np.float64]], npt.ArrayLike],
         distribution: Callable[[npt.NDArray[np.float64]], npt.ArrayLike] | None = None,
     ) -> Self:
         """Create boundary based on samples of a callable.
 
         Parameters
         ----------
-        func : (array) -> array_like
-            Coordinates as function of fraction of distance along the curve.
-
         n : int
             Number of samples to take.
+
+        func : (array) -> array_like
+            Coordinates as function of fraction of distance along the curve.
 
         distribution : (array_like) -> array, optional
             Function to transform the uniform samples into desired distribution.
@@ -208,23 +208,23 @@ class BoundaryCurve(Boundary):
     @classmethod
     def from_line(
         cls,
+        n: int,
         begin: npt.ArrayLike,
         end: npt.ArrayLike,
-        n: int,
         distribution: Callable[[npt.NDArray[np.float64]], npt.ArrayLike] | None = None,
     ) -> Self:
         """Create boundary based on samples of a callable.
 
         Parameters
         ----------
+        n : int
+            Number of samples to take.
+
         begin : array_like
             Coordinates of the start function.
 
         end : array_like
             Coordinates of the end function.
-
-        n : int
-            Number of samples to take.
 
         distribution : (array_like) -> array, optional
             Function to transform the uniform samples into desired distribution.
@@ -239,8 +239,8 @@ class BoundaryCurve(Boundary):
         if p0.shape != (2,) or p1.shape != (2,):
             raise ValueError("Both begin and end must be arrays with 2 elements.")
         return cls.from_samples(
-            lambda s: p0[None, :] * (1 - s[:, None]) + p1[None, :] * s[:, None],
             n,
+            lambda s: p0[None, :] * (1 - s[:, None]) + p1[None, :] * s[:, None],
             distribution,
         )
 
