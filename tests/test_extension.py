@@ -8,11 +8,10 @@ import numpy as np
 # from matplotlib import pyplot as plt
 from rmsh import (
     BoundaryCurve,
-    BoundaryId,
-    MeshBlock,
     SolverConfig,
     create_elliptical_mesh,
 )
+from rmsh.geometry import MeshBlock
 
 
 def test_single_square():
@@ -36,39 +35,23 @@ def test_single_square():
 
     NBND = 30
 
-    c0 = BoundaryCurve(
-        x=interpolate(X0, X1, lambda t: t**2, NBND),
-        y=interpolate(Y0, Y1, lambda t: t**2, NBND),
-    )
-    c1 = BoundaryCurve(
-        x=interpolate(X1, X2, lambda t: t**2, NBND),
-        y=interpolate(Y1, Y2, lambda t: t**2, NBND),
-    )
-    c2 = BoundaryCurve(
-        x=interpolate(X2, X3, lambda t: t**2, NBND),
-        y=interpolate(Y2, Y3, lambda t: t**2, NBND),
-    )
-    c3 = BoundaryCurve(
-        x=interpolate(X3, X0, lambda t: t**2, NBND),
-        y=interpolate(Y3, Y0, lambda t: t**2, NBND),
-    )
-
     b1 = MeshBlock(
         "first",
-        {
-            BoundaryId.BoundarySouth: c0,
-            BoundaryId.BoundaryEast: c1,
-            BoundaryId.BoundaryNorth: c2,
-            BoundaryId.BoundaryWest: c3,
-        },
+        # bottom=BoundaryCurve.from_line((X0, Y0), (X1, Y1), NBND, lambda t: t**2),
+        bottom=BoundaryCurve.from_knots(
+            NBND, (X0, Y0), (0.5, -1), (X1, Y1), distribution=lambda t: t**2
+        ),
+        right=BoundaryCurve.from_line(NBND, (X1, Y1), (X2, Y2), lambda t: t**2),
+        top=BoundaryCurve.from_line(NBND, (X2, Y2), (X3, Y3), lambda t: t**2),
+        left=BoundaryCurve.from_line(NBND, (X3, Y3), (X0, Y0), lambda t: t**2),
     )
 
     cfg = SolverConfig(tolerance=1e-5)
-    m, ry, rx = create_elliptical_mesh([b1], verbose=False, solver_cfg=cfg)
+    m, ry, rx = create_elliptical_mesh(b1, verbose=False, solver_cfg=cfg)
     assert ry <= cfg.tolerance and rx <= cfg.tolerance
 
-    # x = m.x
-    # y = m.y
+    # x = m.pos_x
+    # y = m.pos_y
     # ln = m.lines
     # # lnvals = []
     # xb = x[ln[:, 0]]

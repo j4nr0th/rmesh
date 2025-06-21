@@ -4,12 +4,13 @@ from typing import Self
 
 import numpy as np
 import numpy.typing as npt
+from matplotlib.axes import Axes
+from matplotlib.collections import LineCollection
 
 from rmsh._rmsh import _Mesh2D
 from rmsh.geometry import BoundaryId, _BlockInfoTuple, _SolverCfgTuple
 
 
-# TODO: this could just be a sub-class
 class Mesh2D(_Mesh2D):
     """Class which contains the mesh information.
 
@@ -126,3 +127,20 @@ class Mesh2D(_Mesh2D):
         self, rx, ry = super()._create_elliptical_mesh(arg1, arg2, arg3)
         self._block_name_map = block_name_map
         return (self, rx, ry)
+
+    def plot(self, axes: Axes) -> tuple[tuple[float, float], tuple[float, float]]:
+        """Create a plot to the given axes."""
+        x = self.pos_x
+        y = self.pos_y
+        line_indices = self.lines
+        xb = x[line_indices[:, 0]]
+        xe = x[line_indices[:, 1]]
+        yb = y[line_indices[:, 0]]
+        ye = y[line_indices[:, 1]]
+
+        rb = np.stack((xb, yb), axis=1)
+        re = np.stack((xe, ye), axis=1)
+        c = LineCollection(np.stack((rb, re), axis=1))
+        axes.add_collection(c)
+
+        return ((x.min(), x.max()), (y.min(), y.max()))

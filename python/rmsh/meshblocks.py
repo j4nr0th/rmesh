@@ -1,176 +1,48 @@
 """Mesh block implementation and the function that pre-processes inputs for C code."""
 
+from __future__ import annotations
+
 #   Internal imports
-from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
-#   External imports
 import numpy as np
 
+#   External imports
 from rmsh.geometry import (
+    Boundary,
     BoundaryBlock,
     BoundaryCurve,
     BoundaryId,
+    BoundaryRef,
+    MeshBlock,
     _BlockInfoTuple,
     _BoundaryInfoTuple,
 )
 from rmsh.mesh2d import Mesh2D
 
 
-@dataclass(frozen=True)
-class MeshBlock:
-    """Basic building block of the mesh, which describes a structured mesh block.
+def _find_boundary_size(bnd: BoundaryBlock):
+    if bnd.n != 0:
+        return bnd.n
 
-    Boundaries of the block can be either prescribed curves, or instead a
-    "soft" boundary, where the only information specified is that it should connect to
-    another block. Such "soft" boundaries allow for a potentially smoother transition
-    between different blocks.
-
-    When blocks share a boundary, the only requirement is that the boundary that is
-    shared between them has such a number of nodes that the opposite boundary matches it.
-
-    Parameters
-    ----------
-    label : str
-            Label by which this block will be referred to in the mesh, as well as by other
-            blocks which have a block
-            boundary to this block.
-    boundaries : Mapping of BoundaryId to BoundaryCurve or BoundaryBlock
-        Dictionary containing the boundaries with their respective IDs. All four might be
-        specified, or only a few.
-
-    Attributes
-    ----------
-    label : str
-            Label by which this block will be referred to in the mesh, as well as by other
-            blocks which have a block
-            boundary to this block.
-    boundaries : dict[BoundaryId, BoundaryCurve|BoundaryBlock|None]
-            Dictionary of boundaries, which has entries for the boundaries of the block.
-            For a block to be complete, all four boundaries must be specified.
-    """
-
-    label: str
-    boundaries: dict[BoundaryId, BoundaryCurve | BoundaryBlock | None]
-
-    def __init__(
-        self, label: str, boundaries: Mapping[BoundaryId, BoundaryCurve | BoundaryBlock]
-    ):
-        object.__setattr__(self, "label", label)
-        object.__setattr__(self, "boundaries", dict())
-        for k in boundaries:
-            match k:
-                case (
-                    BoundaryId.BoundaryNorth
-                    | BoundaryId.BoundarySouth
-                    | BoundaryId.BoundaryEast
-                    | BoundaryId.BoundaryWest
-                ):
-                    self.boundaries[k] = boundaries[k]
-                case _:
-                    raise RuntimeError(
-                        f"Boundary has a key of an invalid type ({type(k)}, should be"
-                        f" {BoundaryId})"
-                    )
-
-    def set_boundary(
-        self, bid: BoundaryId, b: BoundaryCurve | BoundaryBlock | None = None
-    ) -> None:
-        """Set a boundary of a block to a specified curve, block, or None.
-
-        If a boundary that is being set is already set to a curve or a block and the new
-        value is not None, a warning will be reported by the function.
-
-        Parameters
-        ----------
-        bid : BoundaryId
-              ID of the boundary to be set
-        b : BoundaryCurve | BoundaryBlock | None = None
-             New value of the boundary specified by `bid`.
-        """
-        prev = None
-        match bid:
-            case (
-                BoundaryId.BoundaryNorth
-                | BoundaryId.BoundarySouth
-                | BoundaryId.BoundaryEast
-                | BoundaryId.BoundaryWest
-            ):
-                prev = self.boundaries[bid]
-                self.boundaries[bid] = b
-            case _:
-                raise RuntimeError("Invalid value of boundary id was specified")
-        if prev is not None and b is not None:
-            raise RuntimeWarning(
-                f"Boundary with id {bid.name} for block {self.label} was set, but was "
-                f"not None previously (was {type(prev)} instead)"
-            )
-
-    def has_all_boundaries(self) -> bool:
-        """Check if a mesh block has all four boundaries specified as non-None values.
-
-        Returns
-        -------
-        bool
-            True if the mesh block has all needed boundaries and False if that is not the
-            case.
-        """
-        return (
-            (
-                BoundaryId.BoundaryNorth in self.boundaries
-                and self.boundaries[BoundaryId.BoundaryNorth] is not None
-            )
-            and (
-                BoundaryId.BoundarySouth in self.boundaries
-                and self.boundaries[BoundaryId.BoundarySouth] is not None
-            )
-            and (
-                BoundaryId.BoundaryEast in self.boundaries
-                and self.boundaries[BoundaryId.BoundaryEast] is not None
-            )
-            and (
-                BoundaryId.BoundaryWest in self.boundaries
-                and self.boundaries[BoundaryId.BoundaryWest] is not None
-            )
-        )
-
-
-def _find_boundary_size(bnd: BoundaryBlock, blcks: dict[str, tuple[int, MeshBlock]]):
-    # if type(bnd) is BoundaryCurve:
-    #     bnd: BoundaryCurve
-    #     return len(bnd.x)
-    checked: list[BoundaryBlock | BoundaryCurve] = [bnd]
+    checked: list[Boundary] = [bnd]
     i = 0
-    boundary: BoundaryBlock | BoundaryCurve = bnd
+    boundary: BoundaryBlock = bnd
     while True:
-        if type(boundary) is BoundaryCurve:
-            return len(boundary.x)
-        assert type(boundary) is BoundaryBlock
+        target = boundary.ref.block
+        other_bnd = target.get_boundary_by_id_existing(boundary.ref.boundary)
 
-        if boundary.n != 0:
-            return boundary.n
+        if other_bnd.n != 0:
+            return other_bnd.n
 
-        _, target = blcks[boundary.target]
-        other_bnd = target.boundaries[boundary.target_id]
-        assert other_bnd is not None
-        if type(other_bnd) is BoundaryCurve:
-            return len(other_bnd.x)
+        new_bnd = target.get_boundary_by_id_existing(
+            boundary.ref.boundary.opposite_boundary
+        )
+        if new_bnd.n != 0:
+            return new_bnd.n
 
-        # if type(other_bnd) is BoundaryBlock:
-        match boundary.target_id:
-            case BoundaryId.BoundaryNorth:
-                new_bnd = target.boundaries[BoundaryId.BoundarySouth]
-            case BoundaryId.BoundarySouth:
-                new_bnd = target.boundaries[BoundaryId.BoundaryNorth]
-            case BoundaryId.BoundaryWest:
-                new_bnd = target.boundaries[BoundaryId.BoundaryEast]
-            case BoundaryId.BoundaryEast:
-                new_bnd = target.boundaries[BoundaryId.BoundaryWest]
-            case _:
-                raise RuntimeError(
-                    "Invalid boundary type for the block boundary encountered"
-                )
-        assert new_bnd is not None
+        assert type(new_bnd) is BoundaryBlock
+
         boundary = new_bnd
         if new_bnd in checked:
             break
@@ -248,7 +120,7 @@ class SolverConfig:
 
 
 def create_elliptical_mesh(
-    blocks: Sequence[MeshBlock],
+    *blocks: MeshBlock,
     verbose: bool = False,
     allow_insane: bool = False,
     solver_cfg: SolverConfig | None = None,
@@ -257,8 +129,8 @@ def create_elliptical_mesh(
 
     Parameters
     ----------
-    blocks : Sequence of MeshBlock
-        A sequence of blocks which constitute the mesh.
+    *blocks : MeshBlock
+        Blocks which constitute the mesh.
     verbose : bool, default: False
         When set to True the solver and function will print extra information to stdout
         related to solver progress. When False, only warnings and exceptions will be
@@ -288,97 +160,50 @@ def create_elliptical_mesh(
             max_iterations=128,
             max_rounds=8,
         )
-    bdict: dict[str, tuple[int, MeshBlock]] = (
-        dict()
-    )  # Holds indices to which the blocks map to
+
     if verbose:
         print("Checking all blocks")
+
+    block_dict: dict[str, int] = dict()
+
     for i, b in enumerate(blocks):
-        if b.label in bdict:
-            raise RuntimeError(f'Multiple blocks with the same label "{b.label}"')
+        label = b.label
+        if label is not None and label in block_dict:
+            raise RuntimeError(f'Multiple blocks with the same label "{label}"')
+
         #   Check if boundaries are correctly set up
-        if (not b.has_all_boundaries()) or (len(b.boundaries) != 4):
+        if not b.has_all_boundaries():
             raise RuntimeError(
-                f"Block {b.label} does not have all boundaries defined"
-                f" (current: {b.boundaries})"
+                f"Block {i} ({label=}) does not have all boundaries defined."
             )
         #   Finally set the label
-        bdict[b.label] = (i, b)
+
+        if label:
+            block_dict[label] = i
+
         if verbose:
             print(f'Block "{b.label}" was good')
+
     if verbose:
         print("Finished checking all blocks")
 
     if verbose:
         print("Checking all boundaries")
+
     #   Make sure that the boundaries are correctly set up
     n_bnds: list[dict[BoundaryId, int]] = []
     for i, b in enumerate(blocks):
         bnd_lens: dict[BoundaryId, int] = dict()
-        for bid in b.boundaries:
-            bnd = b.boundaries[bid]
+        for bid in BoundaryId:
             #   If boundary is BoundaryBlock, it should be sorted
-            nbnd = 0
-            if type(bnd) is BoundaryBlock:
-                iother, other = bdict[bnd.target]
-                bother = other.boundaries[bnd.target_id]
-                if iother > i and type(bother) is BoundaryCurve:
-                    #   Boundaries must be swapped
-                    #   Flip the x and y arrays, since they should be in reverse order
-                    flipped = BoundaryCurve(np.flip(bother.x), np.flip(bother.y))
-
-                    b.boundaries[bid] = flipped
-                    other.boundaries[bnd.target_id] = BoundaryBlock(b.label, bid)
-                    nbnd = len(flipped.x)
-                elif bnd.n != 0:
-                    nbnd = bnd.n
-                else:
-                    nbnd = _find_boundary_size(bnd, bdict)
-            #   Check that the corners of curve match up correctly if check is enabled
-            elif not allow_insane:
-                assert type(bnd) is BoundaryCurve
-                nbnd = len(bnd.x)
-                bleft = None
-                bright = None
-                match bid:
-                    case BoundaryId.BoundaryNorth:
-                        bleft = BoundaryId.BoundaryEast
-                        bright = BoundaryId.BoundaryWest
-                    case BoundaryId.BoundaryWest:
-                        bleft = BoundaryId.BoundaryNorth
-                        bright = BoundaryId.BoundarySouth
-                    case BoundaryId.BoundarySouth:
-                        bleft = BoundaryId.BoundaryWest
-                        bright = BoundaryId.BoundaryEast
-                    case BoundaryId.BoundaryEast:
-                        bleft = BoundaryId.BoundarySouth
-                        bright = BoundaryId.BoundaryNorth
-                bndleft = b.boundaries[bleft]
-                bndright = b.boundaries[bright]
-                if type(bndleft) is BoundaryCurve:
-                    if not _curves_have_common_point(bnd, bndleft):
-                        raise RuntimeWarning(
-                            f"Block {b.label} has curves as boundaries {bid.name} and"
-                            f" {bleft.name}, but they have no common points. To allow"
-                            " such meshes to be counted as valid, "
-                            'call this function with "allow_insane=True"'
-                        )
-                if type(bndright) is BoundaryCurve:
-                    if not _curves_have_common_point(bnd, bndright):
-                        raise RuntimeWarning(
-                            f"Block {b.label} has curves as boundaries {bid.name} and"
-                            f" {bright.name}, but they have no common points. To allow"
-                            " such meshes to be counted as valid, "
-                            'call this function with "allow_insane=True"'
-                        )
-            bnd_lens[bid] = nbnd
+            bnd_lens[bid] = ensure_boundary_well_posed(allow_insane, i, b, bid)
         n_bnds.append(bnd_lens)
 
     for i, (b, nb) in enumerate(zip(blocks, n_bnds)):
-        n_north = nb[BoundaryId.BoundaryNorth]
-        n_south = nb[BoundaryId.BoundarySouth]
-        n_east = nb[BoundaryId.BoundaryEast]
-        n_west = nb[BoundaryId.BoundaryWest]
+        n_north = nb[BoundaryId.BoundaryTop]
+        n_south = nb[BoundaryId.BoundaryBottom]
+        n_east = nb[BoundaryId.BoundaryRight]
+        n_west = nb[BoundaryId.BoundaryLeft]
         if n_north != n_south:
             raise RuntimeError(
                 f"Block {b.label} has {n_north} points on the north boundary, but"
@@ -396,8 +221,8 @@ def create_elliptical_mesh(
     inputs: list[_BlockInfoTuple] = []
     for i, (b, nb) in enumerate(zip(blocks, n_bnds)):
         boundaries: dict[BoundaryId, _BoundaryInfoTuple] = dict()
-        for bid in b.boundaries:
-            bnd = b.boundaries[bid]
+        for bid in BoundaryId:
+            bnd = b.get_boundary_by_id_existing(bid)
             if type(bnd) is BoundaryCurve:
                 boundaries[bid] = (
                     0,
@@ -407,19 +232,26 @@ def create_elliptical_mesh(
                     np.array(bnd.y, dtype=np.float64),
                 )
             elif type(bnd) is BoundaryBlock:
-                iother, other = bdict[bnd.target]
-                boundaries[bid] = (1, bid.value, nb[bid], iother, bnd.target_id.value)
+                # iother, _ = bnd.ref.boundary,
+                boundaries[bid] = (
+                    1,
+                    bid.value,
+                    nb[bid],
+                    blocks.index(bnd.ref.block),
+                    bnd.ref.boundary.value,
+                )
             else:
                 raise RuntimeError(
                     f'Boundary {bid.name} of block "{b.label}" was of invalid type'
                     f" {type(bnd)}"
                 )
+        label = b.label if b.label is not None else "_Unnamed_block_" + str(id(b))
         bv = (
-            b.label,
-            boundaries[BoundaryId.BoundaryNorth],
-            boundaries[BoundaryId.BoundarySouth],
-            boundaries[BoundaryId.BoundaryEast],
-            boundaries[BoundaryId.BoundaryWest],
+            label,
+            boundaries[BoundaryId.BoundaryTop],
+            boundaries[BoundaryId.BoundaryBottom],
+            boundaries[BoundaryId.BoundaryRight],
+            boundaries[BoundaryId.BoundaryLeft],
         )
         inputs.append(bv)
     extra = (
@@ -429,11 +261,66 @@ def create_elliptical_mesh(
         solver_cfg.max_iterations,
         solver_cfg.max_rounds,
     )
-    name_map: dict[str, int] = dict()
-    for k in bdict:
-        name_map[k] = bdict[k][0]
 
     mesh, rx, ry = Mesh2D._create_elliptical_mesh_labeled(
-        inputs, verbose, extra, name_map
+        inputs, verbose, extra, block_dict
     )
     return mesh, rx, ry
+
+
+def ensure_boundary_well_posed(
+    allow_insane: bool,
+    i: int,
+    b: MeshBlock,
+    bid: BoundaryId,
+) -> int:
+    """Make sure the boundary has well defined size and potentially correct ordering."""
+    nbnd = 0
+    bnd = b.get_boundary_by_id_existing(bid)
+    if type(bnd) is BoundaryBlock:
+        iother, other = bnd.ref.boundary, bnd.ref.block
+        bother = other.get_boundary_by_id_existing(bnd.ref.boundary)
+        if iother > i and type(bother) is BoundaryCurve:
+            #   Boundaries must be swapped
+            #   Flip the x and y arrays, since they should be in reverse order
+            flipped = BoundaryCurve(np.flip(bother.x), np.flip(bother.y))
+
+            b.set_boundary_by_id(bid, flipped)
+            other.set_boundary_by_id(
+                bnd.ref.boundary, BoundaryBlock(0, BoundaryRef(b, bid))
+            )
+
+            nbnd = flipped.n
+
+        elif bnd.n != 0:
+            nbnd = bnd.n
+        else:
+            nbnd = _find_boundary_size(bnd)
+            #   Check that the corners of curve match up correctly if check is enabled
+    elif not allow_insane:
+        assert type(bnd) is BoundaryCurve
+        nbnd = bnd.n
+        bleft = None
+        bright = None
+        bleft = bid.prev
+        bright = bid.next
+        bndleft = b.get_boundary_by_id_existing(bleft)
+        bndright = b.get_boundary_by_id_existing(bright)
+        if type(bndleft) is BoundaryCurve:
+            if not _curves_have_common_point(bnd, bndleft):
+                raise RuntimeWarning(
+                    f"Block {b.label} has curves as boundaries {bid.name} and"
+                    f" {bleft.name}, but they have no common points. To allow"
+                    " such meshes to be counted as valid, "
+                    'call this function with "allow_insane=True"'
+                )
+        if type(bndright) is BoundaryCurve:
+            if not _curves_have_common_point(bnd, bndright):
+                raise RuntimeWarning(
+                    f"Block {b.label} has curves as boundaries {bid.name} and"
+                    f" {bright.name}, but they have no common points. To allow"
+                    " such meshes to be counted as valid, "
+                    'call this function with "allow_insane=True"'
+                )
+
+    return nbnd

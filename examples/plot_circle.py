@@ -21,17 +21,16 @@ being useful when trying to identify errors.
 from time import perf_counter
 
 import numpy as np
+import numpy.typing as npt
 from matplotlib import pyplot as plt
 from matplotlib.collections import LineCollection
 from rmsh import (
-    BoundaryBlock,
     BoundaryCurve,
-    BoundaryId,
     Mesh2D,
-    MeshBlock,
     SolverConfig,
     create_elliptical_mesh,
 )
+from rmsh.geometry import MeshBlock
 
 
 def plot_mesh(m: Mesh2D) -> None:
@@ -67,27 +66,23 @@ def plot_mesh(m: Mesh2D) -> None:
 #
 
 
+def circle_function(theta: npt.ArrayLike, r: float = 1.0) -> npt.NDArray[np.float64]:
+    """Return point(s) on a circle of given radius for specified angle(s)."""
+    return np.astype(
+        r * np.stack((np.cos(theta), np.sin(theta)), axis=1, dtype=np.float64),
+        np.float64,
+        copy=False,
+    )
+
+
 def one_block_only(n1: int, n2: int) -> Mesh2D:
     """Mesh a circle with a single block."""
-    angle_l = np.linspace(+0 * np.pi / 2, +1 * np.pi / 2, n1)
-    angle_b = np.linspace(+1 * np.pi / 2, +2 * np.pi / 2, n2)
-    angle_r = np.linspace(+2 * np.pi / 2, +3 * np.pi / 2, n1)
-    angle_t = np.linspace(+3 * np.pi / 2, +4 * np.pi / 2, n2)
+    cl = BoundaryCurve.from_samples(circle_function, n1, lambda t: (t + 2.5) * np.pi / 2)
+    cr = BoundaryCurve.from_samples(circle_function, n1, lambda t: (t + 0.5) * np.pi / 2)
+    ct = BoundaryCurve.from_samples(circle_function, n2, lambda t: (t + 1.5) * np.pi / 2)
+    cb = BoundaryCurve.from_samples(circle_function, n2, lambda t: (t + 3.5) * np.pi / 2)
 
-    cl = BoundaryCurve(np.cos(angle_l), np.sin(angle_l))
-    cr = BoundaryCurve(np.cos(angle_r), np.sin(angle_r))
-    ct = BoundaryCurve(np.cos(angle_t), np.sin(angle_t))
-    cb = BoundaryCurve(np.cos(angle_b), np.sin(angle_b))
-
-    block = MeshBlock(
-        "only one",
-        {
-            BoundaryId.BoundaryWest: cl,
-            BoundaryId.BoundaryEast: cr,
-            BoundaryId.BoundaryNorth: ct,
-            BoundaryId.BoundarySouth: cb,
-        },
-    )
+    block = MeshBlock("only one", left=cl, right=cr, top=ct, bottom=cb)
     t0 = perf_counter()
     m, _, _ = create_elliptical_mesh([block])
     t1 = perf_counter()
@@ -121,24 +116,11 @@ plot_mesh(one_block_only(50, 50))
 
 def self_closed_mesh(n1: int, n2: int) -> Mesh2D:
     """Mesh a circle by self connecting two opposing boundaries."""
-    angle_b = np.linspace(-np.pi, 0, n2)
-    angle_t = np.linspace(0, +np.pi, n2)
-
-    ct = BoundaryCurve(np.cos(angle_t), np.sin(angle_t))
-    cb = BoundaryCurve(np.cos(angle_b), np.sin(angle_b))
-
-    bl = BoundaryBlock("only one", BoundaryId.BoundaryEast, n1)
-    br = BoundaryBlock("only one", BoundaryId.BoundaryWest, n1)
-
-    block = MeshBlock(
-        "only one",
-        {
-            BoundaryId.BoundaryWest: bl,
-            BoundaryId.BoundaryEast: br,
-            BoundaryId.BoundaryNorth: ct,
-            BoundaryId.BoundarySouth: cb,
-        },
-    )
+    ct = BoundaryCurve.from_samples(circle_function, n2, lambda t: (t + 0) * np.pi)
+    cb = BoundaryCurve.from_samples(circle_function, n2, lambda t: (t + 1) * np.pi)
+    block = MeshBlock("only one", top=ct, bottom=cb)
+    block.left = block.bbnd_right(n1)
+    block.right = block.bbnd_left(n1)
 
     t0 = perf_counter()
     m, _, _ = create_elliptical_mesh([block])
@@ -167,61 +149,35 @@ plot_mesh(self_closed_mesh(50, 50))
 
 def four_wierdly_connected_ones(n1: int, n2: int) -> Mesh2D:
     """Mesh in a weird way, where four blocks are used, but weirdly connected."""
-    angle_l = np.linspace(+0 * np.pi / 2, +1 * np.pi / 2, n1)
-    angle_b = np.linspace(+1 * np.pi / 2, +2 * np.pi / 2, n2)
-    angle_r = np.linspace(+2 * np.pi / 2, +3 * np.pi / 2, n1)
-    angle_t = np.linspace(+3 * np.pi / 2, +4 * np.pi / 2, n2)
+    cl = BoundaryCurve.from_samples(circle_function, n1, lambda t: (t + 2.5) * np.pi / 2)
+    cr = BoundaryCurve.from_samples(circle_function, n1, lambda t: (t + 0.5) * np.pi / 2)
+    ct = BoundaryCurve.from_samples(circle_function, n2, lambda t: (t + 1.5) * np.pi / 2)
+    cb = BoundaryCurve.from_samples(circle_function, n2, lambda t: (t + 3.5) * np.pi / 2)
 
-    cl = BoundaryCurve(np.cos(angle_l), np.sin(angle_l))
-    cr = BoundaryCurve(np.cos(angle_r), np.sin(angle_r))
-    ct = BoundaryCurve(np.cos(angle_t), np.sin(angle_t))
-    cb = BoundaryCurve(np.cos(angle_b), np.sin(angle_b))
+    block_left = MeshBlock("left", left=cl)
+    block_right = MeshBlock("right", right=cr)
+    block_bottom = MeshBlock("bottom", bottom=cb)
+    block_top = MeshBlock("top", top=ct)
 
-    blockwest = MeshBlock(
-        "left",
-        {
-            BoundaryId.BoundaryWest: cl,
-            BoundaryId.BoundaryEast: BoundaryBlock("right", BoundaryId.BoundaryWest, n1),
-            BoundaryId.BoundaryNorth: BoundaryBlock("top", BoundaryId.BoundaryWest, n2),
-            BoundaryId.BoundarySouth: BoundaryBlock(
-                "bottom", BoundaryId.BoundaryWest, n2
-            ),
-        },
-    )
-    blockeast = MeshBlock(
-        "right",
-        {
-            BoundaryId.BoundaryWest: BoundaryBlock("left", BoundaryId.BoundaryEast, n1),
-            BoundaryId.BoundaryEast: cr,
-            BoundaryId.BoundaryNorth: BoundaryBlock("top", BoundaryId.BoundaryEast, n2),
-            BoundaryId.BoundarySouth: BoundaryBlock(
-                "bottom", BoundaryId.BoundaryEast, n2
-            ),
-        },
-    )
-    blocknorth = MeshBlock(
-        "top",
-        {
-            BoundaryId.BoundaryWest: BoundaryBlock("left", BoundaryId.BoundaryNorth, n1),
-            BoundaryId.BoundaryEast: BoundaryBlock("right", BoundaryId.BoundaryNorth, n1),
-            BoundaryId.BoundaryNorth: ct,
-            BoundaryId.BoundarySouth: BoundaryBlock(
-                "bottom", BoundaryId.BoundaryNorth, n2
-            ),
-        },
-    )
-    blocksouth = MeshBlock(
-        "bottom",
-        {
-            BoundaryId.BoundaryWest: BoundaryBlock("left", BoundaryId.BoundarySouth, n1),
-            BoundaryId.BoundaryEast: BoundaryBlock("right", BoundaryId.BoundarySouth, n1),
-            BoundaryId.BoundaryNorth: BoundaryBlock("top", BoundaryId.BoundarySouth, n2),
-            BoundaryId.BoundarySouth: cb,
-        },
-    )
+    block_left.right = block_right.bbnd_left(n1)
+    block_left.top = block_top.bbnd_left(n2)
+    block_left.bottom = block_bottom.bbnd_left(n2)
+
+    block_right.left = block_left.bbnd_right(n1)
+    block_right.top = block_top.bbnd_right(n2)
+    block_right.bottom = block_bottom.bbnd_right(n2)
+
+    block_top.left = block_left.bbnd_top(n1)
+    block_top.right = block_right.bbnd_top(n1)
+    block_top.bottom = block_bottom.bbnd_top(n2)
+
+    block_bottom.left = block_left.bbnd_bottom(n1)
+    block_bottom.right = block_right.bbnd_bottom(n1)
+    block_bottom.top = block_top.bbnd_bottom(n2)
+
     t0 = perf_counter()
     m, _, _ = create_elliptical_mesh(
-        [blockwest, blockeast, blocknorth, blocksouth],
+        [block_left, block_right, block_top, block_bottom],
         verbose=False,
         solver_cfg=SolverConfig(smoother_rounds=0, max_iterations=64),
     )
@@ -250,75 +206,42 @@ plot_mesh(four_wierdly_connected_ones(50, 50))
 
 def as_god_intended(n1: int, n2: int, n3: int) -> Mesh2D:
     """Mesh the circle the way God intended."""
-    angle_l = np.linspace(+0 * np.pi / 2, +1 * np.pi / 2, n1)
-    angle_b = np.linspace(+1 * np.pi / 2, +2 * np.pi / 2, n2)
-    angle_r = np.linspace(+2 * np.pi / 2, +3 * np.pi / 2, n1)
-    angle_t = np.linspace(+3 * np.pi / 2, +4 * np.pi / 2, n2)
+    cl = BoundaryCurve.from_samples(circle_function, n1, lambda t: (t + 2.5) * np.pi / 2)
+    cr = BoundaryCurve.from_samples(circle_function, n1, lambda t: (t + 0.5) * np.pi / 2)
+    ct = BoundaryCurve.from_samples(circle_function, n2, lambda t: (t + 1.5) * np.pi / 2)
+    cb = BoundaryCurve.from_samples(circle_function, n2, lambda t: (t + 3.5) * np.pi / 2)
 
-    cl = BoundaryCurve(np.cos(angle_l), np.sin(angle_l))
-    cr = BoundaryCurve(np.cos(angle_r), np.sin(angle_r))
-    ct = BoundaryCurve(np.cos(angle_t), np.sin(angle_t))
-    cb = BoundaryCurve(np.cos(angle_b), np.sin(angle_b))
-
-    blockwest = MeshBlock(
-        "left",
-        {
-            BoundaryId.BoundaryWest: cl,
-            BoundaryId.BoundaryEast: BoundaryBlock("center", BoundaryId.BoundaryWest, n1),
-            BoundaryId.BoundaryNorth: BoundaryBlock("top", BoundaryId.BoundaryWest, n3),
-            BoundaryId.BoundarySouth: BoundaryBlock(
-                "bottom", BoundaryId.BoundaryWest, n3
-            ),
-        },
-    )
-    blockeast = MeshBlock(
-        "right",
-        {
-            BoundaryId.BoundaryWest: BoundaryBlock("center", BoundaryId.BoundaryEast, n1),
-            BoundaryId.BoundaryEast: cr,
-            BoundaryId.BoundaryNorth: BoundaryBlock("top", BoundaryId.BoundaryEast, n3),
-            BoundaryId.BoundarySouth: BoundaryBlock(
-                "bottom", BoundaryId.BoundaryEast, n3
-            ),
-        },
-    )
-    blocknorth = MeshBlock(
-        "top",
-        {
-            BoundaryId.BoundaryWest: BoundaryBlock("left", BoundaryId.BoundaryNorth, n3),
-            BoundaryId.BoundaryEast: BoundaryBlock("right", BoundaryId.BoundaryNorth, n3),
-            BoundaryId.BoundaryNorth: ct,
-            BoundaryId.BoundarySouth: BoundaryBlock(
-                "center", BoundaryId.BoundaryNorth, n2
-            ),
-        },
-    )
-    blocksouth = MeshBlock(
-        "bottom",
-        {
-            BoundaryId.BoundaryWest: BoundaryBlock("left", BoundaryId.BoundarySouth, n3),
-            BoundaryId.BoundaryEast: BoundaryBlock("right", BoundaryId.BoundarySouth, n3),
-            BoundaryId.BoundaryNorth: BoundaryBlock(
-                "center", BoundaryId.BoundarySouth, n2
-            ),
-            BoundaryId.BoundarySouth: cb,
-        },
-    )
-    blockmiddle = MeshBlock(
+    block_left = MeshBlock("left", left=cl)
+    block_right = MeshBlock("right", right=cr)
+    block_bottom = MeshBlock("bottom", bottom=cb)
+    block_top = MeshBlock("top", top=ct)
+    block_center = MeshBlock(
         "center",
-        {
-            BoundaryId.BoundaryWest: BoundaryBlock("left", BoundaryId.BoundaryEast, n1),
-            BoundaryId.BoundaryEast: BoundaryBlock("right", BoundaryId.BoundaryWest, n1),
-            BoundaryId.BoundaryNorth: BoundaryBlock("top", BoundaryId.BoundarySouth, n2),
-            BoundaryId.BoundarySouth: BoundaryBlock(
-                "bottom", BoundaryId.BoundaryNorth, n2
-            ),
-        },
+        left=block_left.bbnd_right(),
+        right=block_right.bbnd_left(),
+        top=block_top.bbnd_bottom(),
+        bottom=block_bottom.bbnd_top(),
     )
+
+    block_left.right = block_center.bbnd_left(n1)
+    block_left.top = block_top.bbnd_left(n3)
+    block_left.bottom = block_bottom.bbnd_left(n3)
+
+    block_right.left = block_center.bbnd_right(n1)
+    block_right.top = block_top.bbnd_right(n3)
+    block_right.bottom = block_bottom.bbnd_right(n3)
+
+    block_top.left = block_left.bbnd_top(n3)
+    block_top.right = block_right.bbnd_top(n3)
+    block_top.bottom = block_center.bbnd_top(n2)
+
+    block_bottom.left = block_left.bbnd_bottom(n3)
+    block_bottom.right = block_right.bbnd_bottom(n3)
+    block_bottom.top = block_center.bbnd_bottom(n2)
 
     t0 = perf_counter()
     m, _, _ = create_elliptical_mesh(
-        [blockwest, blockeast, blocknorth, blocksouth, blockmiddle],
+        [block_left, block_right, block_bottom, block_top, block_center],
         verbose=False,
         solver_cfg=SolverConfig(
             smoother_rounds=0, max_iterations=64, tolerance=5e-6, force_direct=False
@@ -348,23 +271,15 @@ plot_mesh(as_god_intended(25, 25, 25))
 
 def ungodly(n1: int, n2: int) -> Mesh2D:
     """Mesh with no hard boundaries."""
-    blockmiddle = MeshBlock(
-        "center",
-        {
-            BoundaryId.BoundaryWest: BoundaryBlock("center", BoundaryId.BoundaryEast, n1),
-            BoundaryId.BoundaryEast: BoundaryBlock("center", BoundaryId.BoundaryWest, n1),
-            BoundaryId.BoundaryNorth: BoundaryBlock(
-                "center", BoundaryId.BoundarySouth, n2
-            ),
-            BoundaryId.BoundarySouth: BoundaryBlock(
-                "center", BoundaryId.BoundaryNorth, n2
-            ),
-        },
-    )
+    block_center = MeshBlock("center")
+    block_center.left = block_center.bbnd_right(n1)
+    block_center.right = block_center.bbnd_left(n1)
+    block_center.top = block_center.bbnd_bottom(n2)
+    block_center.bottom = block_center.bbnd_top(n2)
 
     t0 = perf_counter()
     m, _, _ = create_elliptical_mesh(
-        [blockmiddle],
+        [block_center],
         verbose=False,
         solver_cfg=SolverConfig(smoother_rounds=0, max_iterations=64),
     )
@@ -391,56 +306,35 @@ plot_mesh(ungodly(25, 25))
 
 def four_weirder(n: int) -> Mesh2D:
     """Outer boundary's correct, but the rest is not."""
-    angle_l = np.linspace(+0 * np.pi / 2, +1 * np.pi / 2, n)
-    angle_b = np.linspace(+1 * np.pi / 2, +2 * np.pi / 2, n)
-    angle_r = np.linspace(+2 * np.pi / 2, +3 * np.pi / 2, n)
-    angle_t = np.linspace(+3 * np.pi / 2, +4 * np.pi / 2, n)
+    cl = BoundaryCurve.from_samples(circle_function, n, lambda t: (t + 2.5) * np.pi / 2)
+    cr = BoundaryCurve.from_samples(circle_function, n, lambda t: (t + 0.5) * np.pi / 2)
+    ct = BoundaryCurve.from_samples(circle_function, n, lambda t: (t + 1.5) * np.pi / 2)
+    cb = BoundaryCurve.from_samples(circle_function, n, lambda t: (t + 3.5) * np.pi / 2)
 
-    cl = BoundaryCurve(np.cos(angle_l), np.sin(angle_l))
-    cr = BoundaryCurve(np.cos(angle_r), np.sin(angle_r))
-    ct = BoundaryCurve(np.cos(angle_t), np.sin(angle_t))
-    cb = BoundaryCurve(np.cos(angle_b), np.sin(angle_b))
+    block_left = MeshBlock("left", left=cl)
+    block_right = MeshBlock("right", right=cr)
+    block_top = MeshBlock("top", top=ct)
+    block_bottom = MeshBlock("bottom", bottom=cb)
 
-    blockwest = MeshBlock(
-        "left",
-        {
-            BoundaryId.BoundaryWest: cl,
-            BoundaryId.BoundaryEast: BoundaryBlock("bottom", BoundaryId.BoundaryWest),
-            BoundaryId.BoundaryNorth: BoundaryBlock("top", BoundaryId.BoundarySouth),
-            BoundaryId.BoundarySouth: BoundaryBlock("right", BoundaryId.BoundaryNorth),
-        },
-    )
-    blockeast = MeshBlock(
-        "right",
-        {
-            BoundaryId.BoundaryWest: BoundaryBlock("top", BoundaryId.BoundaryEast),
-            BoundaryId.BoundaryEast: cr,
-            BoundaryId.BoundaryNorth: BoundaryBlock("left", BoundaryId.BoundarySouth),
-            BoundaryId.BoundarySouth: BoundaryBlock("bottom", BoundaryId.BoundaryNorth),
-        },
-    )
-    blocknorth = MeshBlock(
-        "top",
-        {
-            BoundaryId.BoundaryWest: BoundaryBlock("bottom", BoundaryId.BoundaryEast),
-            BoundaryId.BoundaryEast: BoundaryBlock("right", BoundaryId.BoundaryWest),
-            BoundaryId.BoundaryNorth: ct,
-            BoundaryId.BoundarySouth: BoundaryBlock("left", BoundaryId.BoundaryNorth),
-        },
-    )
-    blocksouth = MeshBlock(
-        "bottom",
-        {
-            BoundaryId.BoundaryWest: BoundaryBlock("left", BoundaryId.BoundaryEast),
-            BoundaryId.BoundaryEast: BoundaryBlock("top", BoundaryId.BoundaryWest),
-            BoundaryId.BoundaryNorth: BoundaryBlock("right", BoundaryId.BoundarySouth),
-            BoundaryId.BoundarySouth: cb,
-        },
-    )
+    block_left.right = block_bottom.bbnd_left()
+    block_left.top = block_top.bbnd_bottom()
+    block_left.bottom = block_right.bbnd_top()
+
+    block_right.left = block_top.bbnd_right()
+    block_right.top = block_left.bbnd_bottom()
+    block_right.bottom = block_bottom.bbnd_top()
+
+    block_top.left = block_bottom.bbnd_right()
+    block_top.right = block_right.bbnd_left()
+    block_top.bottom = block_left.bbnd_top()
+
+    block_bottom.left = block_left.bbnd_right()
+    block_bottom.right = block_top.bbnd_left()
+    block_bottom.top = block_right.bbnd_bottom()
 
     t0 = perf_counter()
     m, _, _ = create_elliptical_mesh(
-        [blockwest, blockeast, blocknorth, blocksouth],
+        [block_left, block_right, block_top, block_bottom],
         verbose=False,
         solver_cfg=SolverConfig(smoother_rounds=0, max_iterations=64),
     )
